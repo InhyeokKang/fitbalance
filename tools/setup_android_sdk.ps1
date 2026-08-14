@@ -1,4 +1,4 @@
-# Android 빌드 툴체인 설치 스크립트 (한 번만 실행)
+﻿# Android 빌드 툴체인 설치 스크립트 (한 번만 실행)
 #
 # 이 PC에는 JDK 8만 있어 Android Gradle Plugin이 동작하지 않는다.
 # 이 스크립트는 JDK 17과 Android SDK(명령줄 도구)를 C:\dev 아래에 설치하고
