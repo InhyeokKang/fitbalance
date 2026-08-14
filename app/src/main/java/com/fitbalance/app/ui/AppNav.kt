@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.fitbalance.app.ui.screens.CourseDetailScreen
 import com.fitbalance.app.ui.screens.HomeScreen
+import com.fitbalance.app.ui.screens.MapScreen
 import com.fitbalance.app.ui.screens.MeasureScreen
 import com.fitbalance.app.ui.screens.RecommendScreen
 import com.fitbalance.app.ui.screens.ReportScreen
@@ -22,6 +23,7 @@ object Routes {
     const val MEASURE = "measure"
     const val REPORT = "report"
     const val RECOMMEND = "recommend"
+    const val MAP = "map"
     const val COURSE = "course/{courseId}"
     const val SETTINGS = "settings"
 
@@ -81,6 +83,17 @@ fun AppNav(vm: AppViewModel = viewModel()) {
                 onBack = { nav.popBackStack(Routes.HOME, inclusive = false) },
                 onRetry = { vm.recommend() },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
+                onCourseClick = { id -> nav.navigate(Routes.course(id)) },
+                onMap = { nav.navigate(Routes.MAP) },
+            )
+        }
+
+        composable(Routes.MAP) {
+            MapScreen(
+                state = recommendation,
+                settings = settings,
+                onBack = { nav.popBackStack() },
+                onRetry = { vm.recommend() },
                 onCourseClick = { id -> nav.navigate(Routes.course(id)) },
             )
         }

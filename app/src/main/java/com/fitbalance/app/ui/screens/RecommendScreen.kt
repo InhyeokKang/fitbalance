@@ -52,6 +52,7 @@ fun RecommendScreen(
     onRetry: () -> Unit,
     onSettings: () -> Unit,
     onCourseClick: (String) -> Unit,
+    onMap: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(Brand.Bg)) {
         when (state) {
@@ -84,7 +85,11 @@ fun RecommendScreen(
                                 bg = Brand.TrackBg, fg = Brand.Muted,
                             )
                         }
-                        VSpace(16)
+                        VSpace(4)
+                        if (r.total > 0) {
+                            GhostButton("지도로 보기", onMap)
+                            VSpace(14)
+                        }
                     }
 
                     if (r.total == 0) {

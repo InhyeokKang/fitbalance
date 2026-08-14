@@ -255,6 +255,26 @@
     0%{transform:translateX(-100%)}100%{transform:translateX(240%)}
   }
 
+  /* 지도 */
+  .map-box{
+    border-radius:var(--r-lg);background:#EFF4F2;overflow:hidden;margin-bottom:12px;
+  }
+  .map-box svg{display:block;width:100%;height:auto}
+  .map-marker{cursor:pointer}
+  .map-card{
+    background:var(--surface);border-radius:18px;padding:16px;box-shadow:var(--shadow);
+  }
+  .map-card .top{display:flex;align-items:center;gap:10px}
+  .map-card .rank{
+    width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-size:12px;font-weight:800;color:#04120D;
+    background:linear-gradient(135deg,#12F0A3,#00C283);
+  }
+  .map-card h3{margin:0;font-size:15.5px;font-weight:750;letter-spacing:-.025em}
+  .map-card .addr{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .map-card .score{font-size:17px;font-weight:800;color:var(--mint-deep);margin-left:auto}
+  .map-card .when{font-size:12.5px;font-weight:600;margin:10px 0 12px}
+
   /* 측정 입력 코치 */
   .coach{display:flex;align-items:center;gap:4px;margin-top:14px}
   .coach .bubble{
@@ -341,7 +361,7 @@ const FIELDS = [
 const state = {
   screen:"home", gender:"M",
   form:Object.fromEntries(FIELDS.map(f => [f.k, ""])),
-  diagnosis:null, recommend:null, course:null,
+  diagnosis:null, recommend:null, course:null, mapSelected:null,
   loading:false, error:null,
   settings: JSON.parse(localStorage.getItem("settings") || "null") || {
     workLat:37.5665, workLng:126.9780, homeLat:37.4979, homeLng:127.0276,
@@ -456,6 +476,96 @@ function coachRow(done, total){
     ${mascot(mood, 72)}
     <div class="bubble ${left === 0 ? "done" : ""}">${esc(message)}</div>
   </div>`;
+}
+
+/**
+ * 퇴근길 지도 SVG. 앱의 MapScreen과 같은 투영·겹침 해소 규칙을 쓴다.
+ * 서울 정도 범위에서는 경도에 cos(위도)만 곱하면 왜곡이 눈에 띄지 않는다.
+ */
+function mapSvg(courses, s, selectedId, W = 372, H = 400){
+  const KM_PER_DEG = 111.32, PAD = 40;
+  const pts = [[s.workLat, s.workLng], [s.homeLat, s.homeLng],
+               ...courses.map(c => [c.lat, c.lng])];
+  const meanLat = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+  const cosLat = Math.cos(meanLat * Math.PI / 180);
+
+  const xs = pts.map(p => p[1] * cosLat), ys = pts.map(p => -p[0]);
+  let minX = Math.min(...xs), maxX = Math.max(...xs);
+  let minY = Math.min(...ys), maxY = Math.max(...ys);
+  const MIN_SPAN = 0.004;
+  if (maxX - minX < MIN_SPAN){ const c = (maxX + minX) / 2; minX = c - MIN_SPAN / 2; maxX = c + MIN_SPAN / 2; }
+  if (maxY - minY < MIN_SPAN){ const c = (maxY + minY) / 2; minY = c - MIN_SPAN / 2; maxY = c + MIN_SPAN / 2; }
+
+  const scale = Math.min((W - PAD * 2) / (maxX - minX), (H - PAD * 2) / (maxY - minY));
+  const offX = PAD + ((W - PAD * 2) - (maxX - minX) * scale) / 2;
+  const offY = PAD + ((H - PAD * 2) - (maxY - minY) * scale) / 2;
+  const at = (lat, lng) => [offX + (lng * cosLat - minX) * scale, offY + (-lat - minY) * scale];
+  const kmPx = km => km / KM_PER_DEG * scale;
+
+  const work = at(s.workLat, s.workLng), home = at(s.homeLat, s.homeLng);
+
+  // 같은 시설의 강좌는 좌표가 같아 그대로 두면 하나만 보인다. 서로 밀어낸다.
+  const GAP = 34, PIN_GAP = 52, MARGIN = 22;
+  const pos = courses.map(c => at(c.lat, c.lng));
+  for (let k = 0; k < 80; k++){
+    for (let i = 0; i < pos.length; i++){
+      for (let j = i + 1; j < pos.length; j++){
+        let dx = pos[j][0] - pos[i][0], dy = pos[j][1] - pos[i][1];
+        let d = Math.hypot(dx, dy);
+        if (d >= GAP) continue;
+        if (d < 0.01){ const a = i * 2.399963; dx = Math.cos(a); dy = Math.sin(a); d = 1; }
+        const push = (GAP - d) / 2, ux = dx / d, uy = dy / d;
+        pos[i][0] -= ux * push; pos[i][1] -= uy * push;
+        pos[j][0] += ux * push; pos[j][1] += uy * push;
+      }
+      for (const f of [work, home]){
+        let dx = pos[i][0] - f[0], dy = pos[i][1] - f[1];
+        let d = Math.hypot(dx, dy);
+        if (d >= PIN_GAP) continue;
+        if (d < 0.01){ dx = 0; dy = 1; d = 1; }
+        pos[i][0] = f[0] + dx / d * PIN_GAP;
+        pos[i][1] = f[1] + dy / d * PIN_GAP;
+      }
+      pos[i][0] = Math.min(Math.max(pos[i][0], MARGIN), W - MARGIN);
+      pos[i][1] = Math.min(Math.max(pos[i][1], MARGIN), H - MARGIN);
+    }
+  }
+
+  let grid = "";
+  for (let x = 0; x < W; x += 44) grid += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#E2E9E7"/>`;
+  for (let y = 0; y < H; y += 44) grid += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#E2E9E7"/>`;
+
+  const markers = courses.map((c, i) => {
+    const on = c.course_id === selectedId, [x, y] = pos[i], r = on ? 19 : 14;
+    return `<g class="map-marker" onclick="selectMarker('${esc(c.course_id)}')">
+      ${on ? `<circle cx="${x}" cy="${y}" r="${r + 9}" fill="var(--mint)" opacity=".25"/>` : ""}
+      <circle cx="${x}" cy="${y}" r="${r + 2.5}" fill="#fff"/>
+      <circle cx="${x}" cy="${y}" r="${r}" fill="${on ? "var(--mint-deep)" : "var(--mint)"}"/>
+      <text x="${x}" y="${y + (on ? 5 : 4)}" text-anchor="middle" font-family="inherit"
+        font-size="${on ? 14 : 11}" font-weight="800" fill="#04120D">${i + 1}</text>
+    </g>`;
+  }).join("");
+
+  const pin = ([x, y], label) => {
+    const w = label.length * 12 + 18, h = 24, top = y - h - 10;
+    return `<circle cx="${x}" cy="${y}" r="7" fill="#fff"/>
+      <circle cx="${x}" cy="${y}" r="4.5" fill="var(--ink)"/>
+      <rect x="${x - w / 2}" y="${top}" width="${w}" height="${h}" rx="${h / 2}" fill="var(--ink)"/>
+      <text x="${x}" y="${top + 16}" text-anchor="middle" font-family="inherit"
+        font-size="11" font-weight="700" fill="#fff">${esc(label)}</text>`;
+  };
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    ${grid}
+    <line x1="${work[0]}" y1="${work[1]}" x2="${home[0]}" y2="${home[1]}"
+      stroke="var(--mint)" stroke-opacity=".13"
+      stroke-width="${kmPx(s.maxDistanceKm) * 2}" stroke-linecap="round"/>
+    <line x1="${work[0]}" y1="${work[1]}" x2="${home[0]}" y2="${home[1]}"
+      stroke="var(--mint-deep)" stroke-opacity=".55" stroke-width="2.5"
+      stroke-linecap="round" stroke-dasharray="10 7"/>
+    ${markers}
+    ${pin(work, "직장")}${pin(home, "집")}
+  </svg>`;
 }
 
 /** 로딩 화면. 스피너 대신 마스코트가 움직인다. */
@@ -802,7 +912,9 @@ function screenRecommend(){
       <span class="chip">${r.query.weak_factors.map(f => FACTOR_LABEL[f]).join("·")} 보강</span>
       <span class="chip gray">${esc(r.query.leave_time)} 퇴근</span>
       <span class="chip gray">동선 ${r.query.max_distance_km}km 이내</span>
-    </div>`;
+    </div>
+    ${r.total > 0 ? `<button class="btn ghost" style="margin-bottom:14px"
+      onclick="go('map')">지도로 보기</button>` : ""}`;
 
   if (r.total === 0) return head + `
     <div class="empty">
@@ -835,6 +947,48 @@ function screenRecommend(){
     + `<div class="btn-stack">
          <button class="btn ghost" onclick="go('settings')">조건 수정</button>
          <button class="btn ghost" onclick="go('home')">홈으로</button></div>`;
+}
+
+function screenMap(){
+  const r = state.recommend;
+  if (!r) return loadingBox("퇴근 동선 안의 강좌를 찾는 중...", "searching");
+
+  const head = `
+    <div class="eyebrow">STEP 2</div>
+    <h2 class="title" style="font-size:21px;margin:0 0 12px">퇴근길 지도</h2>
+    <div class="chips" style="margin-bottom:16px">
+      <span class="chip">강좌 ${r.total}개</span>
+      <span class="chip gray">동선 ${r.query.max_distance_km}km 이내</span>
+    </div>`;
+
+  if (r.total === 0) return head + `
+    <div class="empty">
+      <div style="display:flex;justify-content:center;margin-bottom:6px">${mascot("searching", 110)}</div>
+      <strong>지도에 표시할 강좌가 없습니다</strong>
+      <p>추천 조건을 넓히면 지도에 나타납니다.</p>
+      <button class="btn ghost" onclick="go('recommend')">목록으로</button>
+    </div>`;
+
+  const sel = r.items.find(c => c.course_id === state.mapSelected) || r.items[0];
+  const rank = r.items.indexOf(sel) + 1;
+
+  return head + `
+    <div class="map-box">${mapSvg(r.items, state.settings, sel.course_id)}</div>
+    <div class="map-card">
+      <div class="top">
+        <div class="rank">${rank}</div>
+        <div style="min-width:0">
+          <h3>${esc(sel.title)}</h3>
+          <div class="addr">${esc(sel.address || sel.facility)}</div>
+        </div>
+        <div class="score">${Math.round(sel.score * 100)}</div>
+      </div>
+      <div class="when">${esc(sel.weekday)} ${esc(sel.start_time)} · 동선에서 ${sel.distance_km}km</div>
+      <button class="btn primary" onclick="openCourse('${esc(sel.course_id)}')">이 강좌 자세히 보기</button>
+    </div>
+    <div class="btn-stack">
+      <button class="btn ghost" onclick="go('recommend')">목록으로</button>
+    </div>`;
 }
 
 function screenCourse(){
@@ -933,8 +1087,11 @@ function saveSettings(){
 
 const SCREENS = {
   home:screenHome, measure:screenMeasure, report:screenReport,
-  recommend:screenRecommend, course:screenCourse, settings:screenSettings,
+  recommend:screenRecommend, map:screenMap, course:screenCourse, settings:screenSettings,
 };
+
+/** 지도 마커 선택. 하단 카드가 함께 바뀐다. */
+function selectMarker(courseId){ state.mapSelected = courseId; render(); }
 
 /**
  * 화면 전체를 다시 그린다.
