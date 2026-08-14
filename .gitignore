@@ -20,3 +20,4 @@ server_err.log
 .idea/
 *.iml
 .vscode/
+.venv/

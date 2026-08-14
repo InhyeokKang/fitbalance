@@ -1,0 +1,10 @@
+# 줄바꿈 고정.
+# 맥 실행 스크립트에 CRLF가 들어가면 bash가 "bad interpreter" 로 실행을 거부한다.
+* text=auto
+
+*.command text eol=lf
+*.sh      text eol=lf
+gradlew   text eol=lf
+
+# 윈도우 배치 파일은 CRLF여야 하고, CP949로 저장돼 있으므로 내용 변환을 막는다.
+*.bat -text
