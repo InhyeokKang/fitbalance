@@ -40,6 +40,8 @@ import com.fitbalance.app.data.DiagnoseRequest
 import com.fitbalance.app.ui.components.AppCard
 import com.fitbalance.app.ui.components.Eyebrow
 import com.fitbalance.app.ui.components.GhostButton
+import com.fitbalance.app.ui.components.Mascot
+import com.fitbalance.app.ui.components.MascotMood
 import com.fitbalance.app.ui.components.PrimaryButton
 import com.fitbalance.app.ui.components.VSpace
 import com.fitbalance.app.ui.theme.Brand
@@ -121,6 +123,7 @@ fun MeasureScreen(
             }
         }
 
+        CoachRow(done, FIELDS.size)
         ProgressRow(done, FIELDS.size)
         VSpace(8)
 
@@ -213,6 +216,48 @@ fun MeasureScreen(
         VSpace(9)
         GhostButton("뒤로", onBack)
         VSpace(40)
+    }
+}
+
+/**
+ * 입력 진행에 반응하는 코치 마스코트.
+ * 8칸을 다 채울 때까지 이탈하지 않도록 남은 개수를 말풍선으로 알려 준다.
+ */
+@Composable
+private fun CoachRow(done: Int, total: Int) {
+    val left = total - done
+    val mood = when {
+        done == 0 -> MascotMood.HAPPY
+        left == 0 -> MascotMood.PROUD
+        else -> MascotMood.WORKOUT
+    }
+    val message = when {
+        done == 0 -> "측정값 8가지만 넣으면 바로 진단해 드릴게요."
+        left == 0 -> "다 채우셨어요. 이제 진단해 볼까요?"
+        left <= 2 -> "${left}개만 더요. 거의 다 왔어요!"
+        else -> "${done}개 입력하셨어요. ${left}개 남았습니다."
+    }
+
+    Row(
+        Modifier.fillMaxWidth().padding(top = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Mascot(mood, size = 72, bobMs = if (left == 0) 700 else 1600)
+        Box(
+            Modifier
+                .padding(start = 4.dp)
+                .weight(1f)
+                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp))
+                .background(if (left == 0) Brand.MintSoft else Brand.Surface)
+                .padding(horizontal = 14.dp, vertical = 11.dp)
+        ) {
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (left == 0) Brand.MintDeep else Brand.Muted,
+            )
+        }
     }
 }
 

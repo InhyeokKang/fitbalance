@@ -236,6 +236,34 @@
   .empty strong{display:block;font-size:16px;margin-bottom:6px;letter-spacing:-.02em}
   .empty p{font-size:13px;color:var(--muted);margin:0 0 18px}
 
+  /* 로딩: 마스코트가 분주하게 오르내린다 */
+  .loading{text-align:center;padding:64px 16px}
+  .loading .bob{display:inline-block;animation:bob .52s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-9px)}}
+  .loading p{
+    font-size:13.5px;color:var(--muted);font-weight:600;margin:10px 0 14px;
+  }
+  .loading .bar{
+    width:120px;height:4px;margin:0 auto;border-radius:2px;
+    background:#E6EBEA;overflow:hidden;position:relative;
+  }
+  .loading .bar::after{
+    content:"";position:absolute;inset:0;width:45%;border-radius:2px;
+    background:var(--mint-deep);animation:slide 1.1s ease-in-out infinite;
+  }
+  @keyframes slide{
+    0%{transform:translateX(-100%)}100%{transform:translateX(240%)}
+  }
+
+  /* 측정 입력 코치 */
+  .coach{display:flex;align-items:center;gap:4px;margin-top:14px}
+  .coach .bubble{
+    flex:1;background:var(--surface);border-radius:4px 16px 16px 16px;
+    padding:11px 14px;font-size:13.5px;font-weight:600;color:var(--muted);
+    box-shadow:var(--shadow);
+  }
+  .coach .bubble.done{background:var(--mint-soft);color:var(--mint-deep)}
+
   .skeleton{
     height:14px;border-radius:7px;margin:10px 0;
     background:linear-gradient(90deg,#EDF1F0 25%,#F6F9F8 50%,#EDF1F0 75%);
@@ -411,6 +439,33 @@ function mascot(mood = "happy", size = 96, bodyColor = "var(--mint)"){
 
 /** 종합 점수로 표정을 고른다. 앱의 moodOfScore와 같은 기준. */
 const moodOfScore = score => score >= 70 ? "proud" : score >= 55 ? "happy" : "worried";
+
+/**
+ * 측정 입력 진행에 반응하는 코치. 앱의 CoachRow와 문구·표정 기준이 같다.
+ * 8칸을 다 채울 때까지 이탈하지 않도록 남은 개수를 알려 준다.
+ */
+function coachRow(done, total){
+  const left = total - done;
+  const mood = done === 0 ? "happy" : left === 0 ? "proud" : "workout";
+  const message =
+    done === 0 ? "측정값 8가지만 넣으면 바로 진단해 드릴게요."
+    : left === 0 ? "다 채우셨어요. 이제 진단해 볼까요?"
+    : left <= 2 ? `${left}개만 더요. 거의 다 왔어요!`
+    : `${done}개 입력하셨어요. ${left}개 남았습니다.`;
+  return `<div class="coach">
+    ${mascot(mood, 72)}
+    <div class="bubble ${left === 0 ? "done" : ""}">${esc(message)}</div>
+  </div>`;
+}
+
+/** 로딩 화면. 스피너 대신 마스코트가 움직인다. */
+function loadingBox(message, mood = "workout"){
+  return `<div class="loading">
+    <div class="bob">${mascot(mood, 120)}</div>
+    <p>${esc(message)}</p>
+    <div class="bar"></div>
+  </div>`;
+}
 
 /** 종합 점수 링 (다크 히어로 위에 얹는다) */
 function scoreRing(score, size = 78){
@@ -621,6 +676,7 @@ function screenHome(){
 }
 
 function screenMeasure(){
+  if (state.loading) return loadingBox("체력 기준표와 대조하는 중...", "workout");
   const done = filledCount();
   return `
     <div style="display:flex;justify-content:space-between;align-items:center">
@@ -628,6 +684,8 @@ function screenMeasure(){
         <h2 class="title" style="font-size:21px;margin:0">체력 측정값 입력</h2></div>
       <button class="link" onclick="fillSample()">예시값 채우기</button>
     </div>
+
+    ${coachRow(done, FIELDS.length)}
 
     <div class="progress">
       <span>${done}/${FIELDS.length}</span>
@@ -735,9 +793,7 @@ function screenReport(){
 
 function screenRecommend(){
   const r = state.recommend;
-  if (!r) return `<div class="card">
-    <div class="skeleton" style="width:55%"></div><div class="skeleton"></div>
-    <div class="skeleton" style="width:80%"></div></div>`;
+  if (!r) return loadingBox("퇴근 동선 안의 강좌를 찾는 중...", "searching");
 
   const head = `
     <div class="eyebrow">STEP 2</div>
@@ -783,8 +839,7 @@ function screenRecommend(){
 
 function screenCourse(){
   const c = state.course;
-  if (!c) return `<div class="card">
-    <div class="skeleton" style="width:60%"></div><div class="skeleton"></div></div>`;
+  if (!c) return loadingBox("강좌 정보를 가져오는 중...", "searching");
   const tags = Object.entries(c.tags).filter(([,v]) => v === 1)
                      .map(([k]) => `<span class="chip">${FACTOR_LABEL[k]}</span>`).join("");
   return `

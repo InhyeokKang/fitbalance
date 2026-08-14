@@ -32,6 +32,7 @@ import com.fitbalance.app.ui.components.GhostButton
 import com.fitbalance.app.ui.components.HeroCard
 import com.fitbalance.app.ui.components.LoadingBox
 import com.fitbalance.app.ui.components.Mascot
+import com.fitbalance.app.ui.components.MascotMood
 import com.fitbalance.app.ui.components.PrimaryButton
 import com.fitbalance.app.ui.components.moodOfScore
 import com.fitbalance.app.ui.components.RadarChart
@@ -49,7 +50,8 @@ fun ReportScreen(
 ) {
     Box(Modifier.fillMaxSize().background(Brand.Bg)) {
         when (state) {
-            is UiState.Loading, UiState.Idle -> LoadingBox(message = "체력 기준표와 대조하는 중...")
+            is UiState.Loading, UiState.Idle ->
+                LoadingBox(message = "체력 기준표와 대조하는 중...", mood = MascotMood.WORKOUT)
             is UiState.Error -> ErrorBox(state.message, onRetry = onRetry)
             is UiState.Success -> ReportBody(state.data, onSeeCourses, onBack)
         }

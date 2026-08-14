@@ -63,6 +63,8 @@ fun moodOfScore(score: Int): MascotMood = when {
  *
  * @param bodyColor 몸통 색. 어두운 카드 위에서는 밝은 민트를 쓴다.
  * @param bob 위아래로 살짝 떠다니는 애니메이션 사용 여부.
+ * @param bobMs 한 번 오르내리는 데 걸리는 시간. 짧을수록 분주해 보여 로딩에 어울린다.
+ * @param bobAmount 움직이는 폭. 캔버스 크기 대비 비율.
  */
 @Composable
 fun Mascot(
@@ -71,13 +73,15 @@ fun Mascot(
     size: Int = 96,
     bodyColor: Color = Brand.Mint,
     bob: Boolean = true,
+    bobMs: Int = 1600,
+    bobAmount: Float = 0.035f,
 ) {
     val transition = rememberInfiniteTransition(label = "mascot")
     val offsetY by transition.animateFloat(
         initialValue = 0f,
         targetValue = if (bob) 1f else 0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1600),
+            animation = tween(bobMs),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "bob",
@@ -85,7 +89,7 @@ fun Mascot(
 
     Canvas(modifier.size(size.dp)) {
         val s = this.size.minDimension
-        translate(top = -offsetY * s * 0.035f) {
+        translate(top = -offsetY * s * bobAmount) {
             drawMascot(mood, s, bodyColor)
         }
     }

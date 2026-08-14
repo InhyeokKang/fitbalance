@@ -35,6 +35,7 @@ import com.fitbalance.app.ui.components.ErrorBox
 import com.fitbalance.app.ui.components.GhostButton
 import com.fitbalance.app.ui.components.HeroCard
 import com.fitbalance.app.ui.components.LoadingBox
+import com.fitbalance.app.ui.components.MascotMood
 import com.fitbalance.app.ui.components.SectionHeader
 import com.fitbalance.app.ui.components.VSpace
 import com.fitbalance.app.ui.theme.Brand
@@ -49,7 +50,8 @@ fun CourseDetailScreen(
 
     Box(Modifier.fillMaxSize().background(Brand.Bg)) {
         when (state) {
-            is UiState.Loading, UiState.Idle -> LoadingBox()
+            is UiState.Loading, UiState.Idle ->
+                LoadingBox(message = "강좌 정보를 가져오는 중...", mood = MascotMood.SEARCHING)
             is UiState.Error -> ErrorBox(state.message, onRetry)
             is UiState.Success -> {
                 val c = state.data

@@ -19,7 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -434,13 +434,33 @@ fun RoundSliderThumb() {
     )
 }
 
+/**
+ * 로딩 화면. 스피너 대신 마스코트가 분주하게 움직이며 기다리는 시간을 덜 지루하게 만든다.
+ * [mood]로 무엇을 하는 중인지 표현한다(강좌 검색이면 돋보기 등).
+ */
 @Composable
-fun LoadingBox(modifier: Modifier = Modifier, message: String = "불러오는 중...") {
+fun LoadingBox(
+    modifier: Modifier = Modifier,
+    message: String = "불러오는 중...",
+    mood: MascotMood = MascotMood.WORKOUT,
+) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = Brand.MintDeep, strokeWidth = 3.dp)
+            Mascot(mood, size = 120, bobMs = 520, bobAmount = 0.085f)
+            VSpace(10)
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Brand.Muted,
+                fontWeight = FontWeight.SemiBold,
+            )
             VSpace(14)
-            Text(message, style = MaterialTheme.typography.bodyMedium, color = Brand.Muted)
+            LinearProgressIndicator(
+                color = Brand.MintDeep,
+                trackColor = Brand.TrackBg,
+                strokeCap = StrokeCap.Round,
+                modifier = Modifier.width(120.dp).height(4.dp),
+            )
         }
     }
 }

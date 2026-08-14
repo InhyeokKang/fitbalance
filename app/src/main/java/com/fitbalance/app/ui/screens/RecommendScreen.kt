@@ -56,7 +56,7 @@ fun RecommendScreen(
     Box(Modifier.fillMaxSize().background(Brand.Bg)) {
         when (state) {
             is UiState.Loading, UiState.Idle ->
-                LoadingBox(message = "퇴근 동선 안의 강좌를 찾는 중...")
+                LoadingBox(message = "퇴근 동선 안의 강좌를 찾는 중...", mood = MascotMood.SEARCHING)
 
             is UiState.Error -> ErrorBox(state.message, onRetry = onRetry)
 
