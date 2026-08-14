@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>핏밸런스 — 개발용 미리보기</title>
+<style>
+  :root{
+    --bg:#f7f9f9; --surface:#fff; --line:#e2e8e8; --text:#152020; --muted:#5f7070;
+    --primary:#00796b; --primary-weak:#b2dfdb; --good:#2e9e6b; --mid:#e0a800; --bad:#e4572e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:"Pretendard","Malgun Gothic",system-ui,sans-serif;line-height:1.5}
+  .phone{max-width:430px;margin:0 auto;background:var(--surface);min-height:100vh;
+         box-shadow:0 0 24px rgba(0,0,0,.06)}
+  header{background:var(--primary);color:#fff;padding:14px 20px;display:flex;
+         justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+  header h1{font-size:17px;margin:0;font-weight:600}
+  header button{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;
+                border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+  main{padding:20px}
+  h2{font-size:20px;margin:0 0 8px}
+  p.lead{color:var(--muted);font-size:14px;margin:0 0 20px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+        padding:16px;margin-bottom:12px}
+  .card.hero{background:var(--primary-weak);border-color:transparent}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+  input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;
+               font-size:15px;font-family:inherit;background:#fff;color:var(--text)}
+  input.bad{border-color:var(--bad)}
+  .err{color:var(--bad);font-size:12px;margin-top:4px;min-height:0}
+  .hint{color:var(--muted);font-size:12px;margin-top:4px}
+  button.primary{width:100%;padding:13px;background:var(--primary);color:#fff;border:0;
+                 border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;margin-top:18px}
+  button.primary:disabled{background:#c2cccc;cursor:not-allowed}
+  button.ghost{width:100%;padding:12px;background:transparent;color:var(--primary);
+               border:1px solid var(--primary);border-radius:8px;font-size:15px;cursor:pointer;margin-top:10px}
+  button.link{background:none;border:0;color:var(--primary);font-size:13px;cursor:pointer;padding:0}
+  .bar-wrap{margin:10px 0}
+  .bar-bg{height:10px;background:#e8eded;border-radius:5px;overflow:hidden}
+  .bar-fill{height:10px;border-radius:5px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{background:var(--primary-weak);color:#00332b;border-radius:20px;
+        padding:5px 12px;font-size:12px;white-space:nowrap}
+  .chip.sel{background:var(--primary);color:#fff;cursor:pointer}
+  .chip.unsel{background:#eef2f2;color:var(--muted);cursor:pointer}
+  .course{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer}
+  .course:hover{border-color:var(--primary)}
+  .course h3{margin:0;font-size:16px}
+  .small{font-size:12px;color:var(--muted)}
+  .reason{color:var(--primary);font-size:12px;margin-top:6px}
+  .center{text-align:center;padding:40px 20px;color:var(--muted)}
+  .banner{background:#fff6e5;border-bottom:1px solid #f0dcae;color:#7a5a00;
+          font-size:12px;padding:8px 20px;text-align:center}
+  .gender{display:flex;gap:8px;margin-top:4px}
+  .gender button{flex:1;padding:10px;border:1px solid var(--line);background:#fff;
+                 border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit;color:var(--text)}
+  .gender button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="banner">개발용 브라우저 미리보기입니다. 실제 배포물은 안드로이드 앱입니다.</div>
+  <header>
+    <h1>핏밸런스</h1>
+    <button onclick="go('settings')">설정</button>
+  </header>
+  <main id="app"></main>
+</div>
+
+<script>
+const API = "";                       // 같은 서버에서 서빙되므로 상대 경로
+let deviceId = localStorage.getItem("device_id");
+if (!deviceId) {
+  deviceId = crypto.randomUUID();
+  localStorage.setItem("device_id", deviceId);
+}
+
+const FACTOR_LABEL = {strength:"근력", flex:"유연성", cardio:"심폐지구력", balance:"평형성"};
+
+const PRESETS = [
+  ["시청·광화문", 37.5665, 126.9780],
+  ["강남역", 37.4979, 127.0276],
+  ["여의도", 37.5219, 126.9245],
+  ["판교", 37.3947, 127.1112],
+  ["홍대·마포", 37.5563, 126.9236],
+  ["잠실", 37.5133, 127.1000],
+  ["성수·왕십리", 37.5445, 127.0557],
+];
+
+const FIELDS = [
+  {k:"age",      label:"나이",                 unit:"세", min:19,  max:64,  hint:"만 19~64세",      sample:"34"},
+  {k:"height",   label:"키",                   unit:"cm", min:100, max:250, hint:"",                sample:"175"},
+  {k:"weight",   label:"몸무게",               unit:"kg", min:30,  max:200, hint:"",                sample:"78"},
+  {k:"grip",     label:"악력",                 unit:"kg", min:5,   max:120, hint:"양손 중 높은 값", sample:"45"},
+  {k:"situp",    label:"교차윗몸일으키기",     unit:"회", min:0,   max:100, hint:"60초간 횟수",     sample:"38"},
+  {k:"sitreach", label:"앉아윗몸앞으로굽히기", unit:"cm", min:-30, max:40,  hint:"음수 입력 가능",  sample:"6.5"},
+  {k:"shuttle",  label:"왕복오래달리기",       unit:"회", min:0,   max:120, hint:"20m 셔틀런 횟수", sample:"52"},
+  {k:"balance",  label:"눈감고외발서기",       unit:"초", min:0,   max:120, hint:"최대 120초",      sample:"21"},
+];
+
+const state = {
+  screen: "home",
+  gender: "M",
+  form: Object.fromEntries(FIELDS.map(f => [f.k, ""])),
+  diagnosis: null,
+  recommend: null,
+  course: null,
+  loading: false,
+  error: null,
+  settings: JSON.parse(localStorage.getItem("settings") || "null") || {
+    workLat:37.5665, workLng:126.9780, homeLat:37.4979, homeLng:127.0276,
+    leaveTime:"18:30", maxDistanceKm:3.0
+  },
+};
+
+const app = document.getElementById("app");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function go(screen){ state.screen = screen; state.error = null; render(); }
+
+function barColor(p){ return p >= 60 ? "var(--good)" : p >= 40 ? "var(--mid)" : "var(--bad)"; }
+
+function bar(label, percentile, grade, weak){
+  return `<div class="bar-wrap">
+    <div class="row">
+      <span style="font-size:14px;${weak ? "font-weight:700" : ""}">${esc(label)}${weak ? " ⚠" : ""}</span>
+      <span class="small" style="color:${barColor(percentile)};font-weight:600">
+        100명 중 ${100 - percentile}등 · ${esc(grade)}</span>
+    </div>
+    <div class="bar-bg"><div class="bar-fill"
+      style="width:${Math.max(2, percentile)}%;background:${barColor(percentile)}"></div></div>
+  </div>`;
+}
+
+function fieldError(f){
+  const raw = state.form[f.k];
+  if (raw === "") return null;
+  const v = Number(raw);
+  if (raw.trim() === "" || Number.isNaN(v)) return "숫자만 입력해 주세요";
+  if (v < f.min || v > f.max) return `${f.min}~${f.max}${f.unit} 범위로 입력해 주세요`;
+  return null;
+}
+const formValid = () => FIELDS.every(f => state.form[f.k] !== "" && !fieldError(f));
+
+async function call(path, options){
+  state.loading = true; state.error = null; render();
+  try {
+    const res = await fetch(API + path, options);
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail ? JSON.stringify(body.detail) : `HTTP ${res.status}`);
+    return body;
+  } catch (e) {
+    state.error = "서버 요청 실패: " + e.message;
+    return null;
+  } finally {
+    state.loading = false;
+  }
+}
+
+const post = (path, body) => call(path, {
+  method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+});
+
+async function submitDiagnose(){
+  const n = k => Number(state.form[k]);
+  const body = {
+    device_id: deviceId, gender: state.gender, age: n("age"),
+    height_cm: n("height"), weight_kg: n("weight"), grip_kg: n("grip"),
+    sit_up: n("situp"), sit_reach_cm: n("sitreach"),
+    shuttle_run: n("shuttle"), one_leg_stand_sec: n("balance"),
+  };
+  const r = await post("/api/v1/diagnose", body);
+  if (r) { state.diagnosis = r; state.screen = "report"; }
+  render();
+}
+
+async function loadRecommend(){
+  const s = state.settings;
+  const body = {
+    device_id: deviceId,
+    diagnosis_id: state.diagnosis ? state.diagnosis.diagnosis_id : null,
+    weak_factors: state.diagnosis ? null : ["flex","balance"],
+    work_lat:s.workLat, work_lng:s.workLng, home_lat:s.homeLat, home_lng:s.homeLng,
+    leave_time:s.leaveTime, max_distance_km:s.maxDistanceKm, limit:10,
+  };
+  state.screen = "recommend"; render();
+  const r = await post("/api/v1/recommend", body);
+  if (r) state.recommend = r;
+  render();
+}
+
+async function openCourse(id){
+  state.screen = "course"; state.course = null; render();
+  const r = await call("/api/v1/courses/" + id);
+  if (r) state.course = r;
+  render();
+}
+
+// ------------------------------------------------------------------ 화면
+
+function screenHome(){
+  const d = state.diagnosis;
+  return `
+    <h2>앉아서 일하는 몸,<br>어디가 무너졌는지부터 봅니다</h2>
+    <p class="lead">국민체력100 기준표로 체력을 진단하고, 퇴근길 동선 안의 공공 체육 강좌를 추천받으세요.</p>
+    ${d ? `
+      <div class="card">
+        <div class="small">최근 진단</div>
+        <div class="row">
+          <strong style="font-size:19px">${esc(d.imbalance_type)}</strong>
+          <strong style="font-size:19px;color:var(--primary)">${d.total_score}점</strong>
+        </div>
+        <div style="margin-top:10px">
+          ${d.factors.map(f => bar(f.label, f.percentile, f.grade,
+              d.weak_factors.includes(f.factor))).join("")}
+        </div>
+      </div>` : `
+      <div class="card" style="background:#eef2f2;border-color:transparent">
+        <strong>아직 진단 기록이 없습니다</strong>
+        <div class="small" style="margin-top:6px">체력 측정값 8가지를 입력하면 바로 불균형 유형이 나옵니다.</div>
+      </div>`}
+    <button class="primary" onclick="go('measure')">${d ? "다시 측정하기" : "체력 측정하기"}</button>
+    <button class="ghost" onclick="loadRecommend()" ${d ? "" : "disabled style='opacity:.4;cursor:not-allowed'"}>
+      추천 강좌 보기</button>
+    ${d ? "" : `<div class="hint" style="text-align:center">진단을 먼저 마쳐야 추천을 받을 수 있습니다.</div>`}
+  `;
+}
+
+function screenMeasure(){
+  return `
+    <div class="row">
+      <h2 style="font-size:18px">체력 측정값 입력</h2>
+      <button class="link" onclick="fillSample()">예시값 채우기</button>
+    </div>
+    <label>성별</label>
+    <div class="gender">
+      <button class="${state.gender === "M" ? "on" : ""}" onclick="setGender('M')">남성</button>
+      <button class="${state.gender === "F" ? "on" : ""}" onclick="setGender('F')">여성</button>
+    </div>
+    ${FIELDS.map(f => {
+      const err = fieldError(f);
+      return `<label>${esc(f.label)} (${f.unit})</label>
+        <input class="${err ? "bad" : ""}" value="${esc(state.form[f.k])}"
+               oninput="setField('${f.k}', this.value)" inputmode="decimal">
+        <div class="${err ? "err" : "hint"}">${esc(err || f.hint || `${f.min} ~ ${f.max}${f.unit}`)}</div>`;
+    }).join("")}
+    <button class="primary" onclick="submitDiagnose()" ${formValid() ? "" : "disabled"}>진단하기</button>
+    ${formValid() ? "" : `<div class="hint" style="text-align:center">모든 항목을 허용 범위 안의 숫자로 입력해 주세요.</div>`}
+    <button class="ghost" onclick="go('home')">뒤로</button>
+  `;
+}
+
+function screenReport(){
+  const d = state.diagnosis;
+  if (!d) return `<div class="center">진단 결과가 없습니다.</div>`;
+  const weakLabels = d.factors.filter(f => d.weak_factors.includes(f.factor))
+                              .map(f => f.label).join("·");
+  return `
+    <div class="card hero">
+      <div class="row">
+        <strong style="font-size:21px">${esc(d.imbalance_type)}</strong>
+        <strong style="font-size:21px">${d.total_score}점</strong>
+      </div>
+      <p style="margin:8px 0 0;font-size:14px">${esc(d.imbalance_desc)}</p>
+      <div class="small" style="margin-top:8px">
+        ${d.gender === "M" ? "남성" : "여성"} · ${esc(d.age_band.replace("s","대"))} 기준</div>
+    </div>
+
+    <h3 style="font-size:15px;margin:20px 0 4px">체력요인별 백분위</h3>
+    ${d.factors.map(f => bar(f.label, f.percentile, f.grade,
+        d.weak_factors.includes(f.factor))).join("")}
+    <div class="hint">⚠ 표시된 ${esc(weakLabels)}이(가) 가장 뒤처진 두 요인입니다.
+      추천 강좌는 이 두 가지를 기준으로 고릅니다.</div>
+
+    <h3 style="font-size:15px;margin:22px 0 8px">측정 항목 상세</h3>
+    ${d.items.map(i => `
+      <div class="row" style="padding:7px 0;border-bottom:1px solid var(--line)">
+        <div><div style="font-size:14px">${esc(i.label)}</div>
+             <div class="small">${i.value}${esc(i.unit)}</div></div>
+        <div style="text-align:right"><div style="font-size:14px">100명 중 ${100 - i.percentile}등</div>
+             <div class="small">${esc(i.grade)}</div></div>
+      </div>`).join("")}
+
+    <div class="card" style="margin-top:14px">
+      <div class="row"><span>체질량지수(BMI)</span>
+        <strong style="color:${d.bmi.in_normal_range ? "var(--primary)" : "var(--bad)"}">
+          ${d.bmi.value} · ${esc(d.bmi.category)}</strong></div>
+    </div>
+
+    <button class="primary" onclick="loadRecommend()">이 약점에 맞는 강좌 보기</button>
+    <button class="ghost" onclick="go('home')">홈으로</button>
+  `;
+}
+
+function screenRecommend(){
+  const r = state.recommend;
+  if (!r) return `<div class="center">불러오는 중...</div>`;
+  const chips = `<div class="chips">
+      <span class="chip">${r.query.weak_factors.map(f => FACTOR_LABEL[f]).join("·")}</span>
+      <span class="chip">${esc(r.query.leave_time)} 퇴근</span>
+      <span class="chip">동선 ${r.query.max_distance_km}km 이내</span>
+    </div>`;
+  if (r.total === 0) {
+    return chips + `<div class="center">
+      <strong>조건에 맞는 강좌가 없습니다</strong>
+      <p style="font-size:14px">${esc(r.hint || "최대 거리를 넓히거나 퇴근 시각을 조정해 보세요.")}</p>
+      <button class="ghost" onclick="go('settings')">조건 수정하기</button>
+      <button class="ghost" onclick="go('home')">홈으로</button></div>`;
+  }
+  return chips + r.items.map(c => `
+    <div class="course" onclick="openCourse('${esc(c.course_id)}')">
+      <div class="row"><h3>${esc(c.title)}</h3>
+        <strong style="color:var(--primary)">${Math.round(c.score * 100)}점</strong></div>
+      <div class="small">${esc(c.facility)} · ${esc(c.sport)}</div>
+      <div class="small">${esc(c.weekday)}요일 ${esc(c.start_time)} 시작 · 동선에서 ${c.distance_km}km</div>
+      <div class="reason">${esc(c.match_reason)}</div>
+    </div>`).join("")
+    + `<button class="ghost" onclick="go('settings')">조건 수정</button>
+       <button class="ghost" onclick="go('home')">홈으로</button>`;
+}
+
+function screenCourse(){
+  const c = state.course;
+  if (!c) return `<div class="center">불러오는 중...</div>`;
+  const tags = Object.entries(c.tags).filter(([,v]) => v === 1)
+                     .map(([k]) => `<span class="chip">${FACTOR_LABEL[k]}</span>`).join("");
+  return `
+    <h2>${esc(c.title)}</h2>
+    <p class="lead">${esc(c.facility)} · ${esc(c.sport)}</p>
+    <div class="card">
+      <div class="row" style="padding:5px 0"><span class="small">일정</span>
+        <span>${esc(c.weekday)}요일 ${esc(c.start_time)}</span></div>
+      <div class="row" style="padding:5px 0"><span class="small">시설</span>
+        <span>${esc(c.facility)}</span></div>
+      <div class="row" style="padding:5px 0"><span class="small">좌표</span>
+        <span>${c.lat}, ${c.lng}</span></div>
+    </div>
+    <h3 style="font-size:15px;margin:18px 0 8px">이 강좌가 키우는 체력요인</h3>
+    <div class="chips">${tags}</div>
+    <button class="primary" onclick="window.open('${esc(c.apply_url)}','_blank')">신청 페이지 열기</button>
+    <div class="hint" style="text-align:center">앱 안에서 예약되지 않고, 해당 시설의 신청 페이지로 이동합니다.</div>
+    <button class="ghost" onclick="go('recommend')">뒤로</button>
+  `;
+}
+
+function screenSettings(){
+  const s = state.settings;
+  const presetRow = (which) => `<div class="chips">` + PRESETS.map(([name, lat, lng]) => {
+    const sel = Math.abs(s[which + "Lat"] - lat) < 0.0005 && Math.abs(s[which + "Lng"] - lng) < 0.0005;
+    return `<span class="chip ${sel ? "sel" : "unsel"}"
+              onclick="pickPlace('${which}',${lat},${lng})">${name}</span>`;
+  }).join("") + `</div>`;
+
+  return `
+    <h2 style="font-size:18px">설정</h2>
+    <label>직장 위치</label>${presetRow("work")}
+    <div class="hint">${s.workLat.toFixed(4)}, ${s.workLng.toFixed(4)}</div>
+    <label>집 위치</label>${presetRow("home")}
+    <div class="hint">${s.homeLat.toFixed(4)}, ${s.homeLng.toFixed(4)}</div>
+    <label>퇴근 시각 (HH:MM)</label>
+    <input value="${esc(s.leaveTime)}" oninput="setSetting('leaveTime', this.value)">
+    <div class="hint">이 시각 30분 뒤부터 시작하는 강좌를 찾습니다</div>
+    <label>퇴근 동선에서 최대 ${s.maxDistanceKm.toFixed(1)}km</label>
+    <input type="range" min="0.5" max="10" step="0.5" value="${s.maxDistanceKm}"
+           oninput="setSetting('maxDistanceKm', Number(this.value))">
+    <div class="hint">직장과 집을 잇는 직선에서 이 거리 안의 강좌만 추천합니다.</div>
+    <div class="card" style="margin-top:20px">
+      <strong style="font-size:14px">기기 정보</strong>
+      <div class="small" style="margin-top:8px;word-break:break-all">기기 UUID<br>${esc(deviceId)}</div>
+    </div>
+    <button class="primary" onclick="saveSettings()">저장</button>
+    <button class="ghost" onclick="go('home')">홈으로</button>
+  `;
+}
+
+// ------------------------------------------------------------------ 액션
+
+function setGender(g){ state.gender = g; render(); }
+function setField(k, v){ state.form[k] = v; render(); }
+function fillSample(){ FIELDS.forEach(f => state.form[f.k] = f.sample); render(); }
+function pickPlace(which, lat, lng){
+  state.settings[which + "Lat"] = lat;
+  state.settings[which + "Lng"] = lng;
+  render();
+}
+function setSetting(k, v){ state.settings[k] = v; render(); }
+function saveSettings(){
+  localStorage.setItem("settings", JSON.stringify(state.settings));
+  if (state.diagnosis) loadRecommend(); else go("home");
+}
+
+const SCREENS = {
+  home: screenHome, measure: screenMeasure, report: screenReport,
+  recommend: screenRecommend, course: screenCourse, settings: screenSettings,
+};
+
+function render(){
+  let html = "";
+  if (state.error) {
+    html += `<div class="card" style="border-color:var(--bad);color:var(--bad)">
+               ${esc(state.error)}</div>`;
+  }
+  if (state.loading) html += `<div class="center">불러오는 중...</div>`;
+  else html += SCREENS[state.screen]();
+  app.innerHTML = html;
+}
+
+render();
+</script>
+</body>
+</html>

@@ -27,6 +27,13 @@ def test_health():
         assert body["courses_rows"] == 30
 
 
+def test_demo_page_served():
+    with TestClient(app) as c:
+        r = c.get("/demo")
+        assert r.status_code == 200
+        assert "핏밸런스" in r.text
+
+
 def test_diagnose_returns_percentiles_and_weak_factors():
     with TestClient(app) as c:
         r = c.post("/api/v1/diagnose", json=SAMPLE)

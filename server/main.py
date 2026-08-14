@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -307,6 +308,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="FitBalance API", version="0.1.0", lifespan=lifespan)
+
+
+@app.get("/demo")
+def demo_page():
+    """개발용 브라우저 미리보기. 앱과 같은 API를 호출한다(안드로이드 빌드 대체물 아님)."""
+    return FileResponse(Path(__file__).parent / "static" / "demo.html")
 
 
 @app.get("/api/v1/health")
