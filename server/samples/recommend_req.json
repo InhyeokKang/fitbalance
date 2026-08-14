@@ -1,0 +1,11 @@
+{
+  "device_id": "demo-uuid-0001",
+  "weak_factors": ["flex", "balance"],
+  "work_lat": 37.5665,
+  "work_lng": 126.9780,
+  "home_lat": 37.4979,
+  "home_lng": 127.0276,
+  "leave_time": "18:30",
+  "max_distance_km": 3.0,
+  "limit": 5
+}

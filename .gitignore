@@ -1,0 +1,22 @@
+# 빌드 산출물
+build/
+app/build/
+.gradle/
+local.properties
+*.apk
+*.aab
+
+# 파이썬
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 런타임 생성물
+data/app.db
+server_out.log
+server_err.log
+
+# IDE
+.idea/
+*.iml
+.vscode/

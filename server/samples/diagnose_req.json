@@ -1,0 +1,12 @@
+{
+  "device_id": "demo-uuid-0001",
+  "gender": "M",
+  "age": 34,
+  "height_cm": 175,
+  "weight_kg": 78,
+  "grip_kg": 45,
+  "sit_up": 38,
+  "sit_reach_cm": 6.5,
+  "shuttle_run": 52,
+  "one_leg_stand_sec": 21
+}
