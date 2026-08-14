@@ -1,43 +1,50 @@
 package com.fitbalance.app.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.fitbalance.app.data.DiagnoseRequest
-import com.fitbalance.app.ui.components.HSpace
+import com.fitbalance.app.ui.components.AppCard
+import com.fitbalance.app.ui.components.Eyebrow
+import com.fitbalance.app.ui.components.GhostButton
+import com.fitbalance.app.ui.components.PrimaryButton
 import com.fitbalance.app.ui.components.VSpace
+import com.fitbalance.app.ui.theme.Brand
 
-/** 입력 항목 정의: 라벨, 단위, 허용 범위, 도움말. docs/서비스_아이디어.md의 측정 항목 표를 따른다. */
+/** 입력 항목 정의. docs/서비스_아이디어.md의 측정 항목 표를 따른다. */
 private data class MeasureField(
     val key: String,
     val label: String,
@@ -62,7 +69,6 @@ private val FIELDS = listOf(
 private fun Double.fmt(): String =
     if (this % 1.0 == 0.0) this.toInt().toString() else this.toString()
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeasureScreen(
     deviceId: String,
@@ -82,107 +88,202 @@ fun MeasureScreen(
         return null
     }
 
-    val allValid = FIELDS.all { values[it.key].orEmpty().isNotBlank() && errorOf(it) == null }
+    val done = FIELDS.count { values[it.key].orEmpty().isNotBlank() && errorOf(it) == null }
+    val allValid = done == FIELDS.size
     fun num(key: String): Double = values[key]?.toDoubleOrNull() ?: 0.0
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("체력 측정값 입력") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
-                    }
-                },
-            )
-        }
-    ) { pad ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(pad)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState())
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Brand.Bg)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+    ) {
+        BrandBar()
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("성별", fontWeight = FontWeight.Bold)
-                TextButton(onClick = { FIELDS.forEach { values[it.key] = it.sample } }) {
-                    Text("예시값 채우기")
+            Column {
+                Eyebrow("STEP 1")
+                VSpace(6)
+                Text("체력 측정값 입력", style = MaterialTheme.typography.titleLarge)
+            }
+            TextButton(onClick = { FIELDS.forEach { values[it.key] = it.sample } }) {
+                Text(
+                    "예시값 채우기",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Brand.MintDeep,
+                )
+            }
+        }
+
+        ProgressRow(done, FIELDS.size)
+        VSpace(8)
+
+        AppCard(padding = 18) {
+            Column {
+                Text(
+                    "성별",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Brand.Muted,
+                )
+                VSpace(8)
+                SegmentedGender(gender) { gender = it }
+
+                FIELDS.forEach { f ->
+                    val err = errorOf(f)
+                    VSpace(14)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Text(
+                            f.label,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Brand.Muted,
+                        )
+                        Text(f.unit, fontSize = 11.sp, color = Brand.Muted2)
+                    }
+                    VSpace(6)
+                    OutlinedTextField(
+                        value = values[f.key].orEmpty(),
+                        onValueChange = { values[f.key] = it },
+                        placeholder = {
+                            Text(
+                                "${f.min.fmt()} ~ ${f.max.fmt()}",
+                                color = Brand.Muted2,
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        },
+                        isError = err != null,
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Brand.Mint,
+                            unfocusedBorderColor = Brand.Line,
+                            errorBorderColor = Brand.Coral,
+                            focusedContainerColor = Brand.Surface,
+                            unfocusedContainerColor = Brand.Surface,
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = if (f.key == "sitreach") KeyboardType.Text else KeyboardType.Number
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    VSpace(5)
+                    Text(
+                        err ?: f.hint.ifBlank { "${f.min.fmt()} ~ ${f.max.fmt()}${f.unit}" },
+                        fontSize = 11.5.sp,
+                        fontWeight = if (err != null) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (err != null) Brand.Coral else Brand.Muted2,
+                    )
                 }
             }
-            Row {
-                FilterChip(
-                    selected = gender == "M",
-                    onClick = { gender = "M" },
-                    label = { Text("남성") },
-                )
-                HSpace(8)
-                FilterChip(
-                    selected = gender == "F",
-                    onClick = { gender = "F" },
-                    label = { Text("여성") },
-                )
-            }
-            VSpace(16)
+        }
 
-            FIELDS.forEach { f ->
-                val err = errorOf(f)
-                OutlinedTextField(
-                    value = values[f.key].orEmpty(),
-                    onValueChange = { values[f.key] = it },
-                    label = { Text("${f.label} (${f.unit})") },
-                    supportingText = {
-                        Text(
-                            err
-                                ?: f.hint.ifBlank { "${f.min.fmt()} ~ ${f.max.fmt()}${f.unit}" }
-                        )
-                    },
-                    isError = err != null,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = if (f.key == "sitreach") KeyboardType.Text else KeyboardType.Number
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                VSpace(4)
-            }
-
-            VSpace(12)
-            Button(
-                onClick = {
-                    onSubmit(
-                        DiagnoseRequest(
-                            deviceId = deviceId,
-                            gender = gender,
-                            age = num("age").toInt(),
-                            heightCm = num("height"),
-                            weightKg = num("weight"),
-                            gripKg = num("grip"),
-                            sitUp = num("situp").toInt(),
-                            sitReachCm = num("sitreach"),
-                            shuttleRun = num("shuttle").toInt(),
-                            oneLegStandSec = num("balance"),
-                        )
+        VSpace(22)
+        PrimaryButton(
+            text = if (allValid) "진단하기" else "${FIELDS.size - done}개 항목이 남았습니다",
+            onClick = {
+                onSubmit(
+                    DiagnoseRequest(
+                        deviceId = deviceId,
+                        gender = gender,
+                        age = num("age").toInt(),
+                        heightCm = num("height"),
+                        weightKg = num("weight"),
+                        gripKg = num("grip"),
+                        sitUp = num("situp").toInt(),
+                        sitReachCm = num("sitreach"),
+                        shuttleRun = num("shuttle").toInt(),
+                        oneLegStandSec = num("balance"),
                     )
-                },
-                enabled = allValid,
-                modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            enabled = allValid,
+        )
+        VSpace(9)
+        GhostButton("뒤로", onBack)
+        VSpace(40)
+    }
+}
+
+@Composable
+private fun ProgressRow(done: Int, total: Int) {
+    val ratio by animateFloatAsState(
+        targetValue = done.toFloat() / total,
+        animationSpec = tween(400),
+        label = "progress",
+    )
+    Row(
+        Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "$done/$total",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
+            color = Brand.Muted,
+        )
+        Box(
+            Modifier
+                .padding(start = 10.dp)
+                .weight(1f)
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Brand.Line)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(ratio)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Brand.PrimaryGradient)
+            )
+        }
+    }
+}
+
+/** 세그먼트 컨트롤. 두 값 선택에는 FilterChip보다 눈이 덜 피로하다. */
+@Composable
+private fun SegmentedGender(selected: String, onSelect: (String) -> Unit) {
+    val trackColor = Color(0xFFEBEFEE)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(trackColor)
+            .padding(4.dp)
+    ) {
+        listOf("M" to "남성", "F" to "여성").forEach { (code, label) ->
+            val on = selected == code
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (on) Brand.Surface else Color.Transparent)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onSelect(code) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Text("진단하기")
-            }
-            if (!allValid) {
-                VSpace(6)
                 Text(
-                    "모든 항목을 허용 범위 안의 숫자로 입력해 주세요.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (on) Brand.Ink else Brand.Muted,
                 )
             }
-            VSpace(32)
         }
     }
 }

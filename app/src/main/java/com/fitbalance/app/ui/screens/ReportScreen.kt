@@ -1,39 +1,43 @@
 package com.fitbalance.app.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.fitbalance.app.data.DiagnoseResponse
 import com.fitbalance.app.ui.UiState
+import com.fitbalance.app.ui.components.AppCard
 import com.fitbalance.app.ui.components.ErrorBox
+import com.fitbalance.app.ui.components.Eyebrow
+import com.fitbalance.app.ui.components.FactorBar
+import com.fitbalance.app.ui.components.GhostButton
+import com.fitbalance.app.ui.components.HeroCard
 import com.fitbalance.app.ui.components.LoadingBox
-import com.fitbalance.app.ui.components.PercentileBar
+import com.fitbalance.app.ui.components.PrimaryButton
+import com.fitbalance.app.ui.components.RadarChart
+import com.fitbalance.app.ui.components.ScoreRing
+import com.fitbalance.app.ui.components.SectionHeader
 import com.fitbalance.app.ui.components.VSpace
+import com.fitbalance.app.ui.theme.Brand
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportScreen(
     state: UiState<DiagnoseResponse>,
@@ -41,26 +45,11 @@ fun ReportScreen(
     onRetry: () -> Unit,
     onSeeCourses: () -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("진단 리포트") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
-                    }
-                },
-            )
-        }
-    ) { pad ->
+    Box(Modifier.fillMaxSize().background(Brand.Bg)) {
         when (state) {
-            is UiState.Loading, UiState.Idle ->
-                LoadingBox(Modifier.padding(pad), "체력 기준표와 대조하는 중...")
-
-            is UiState.Error ->
-                ErrorBox(state.message, onRetry = onRetry, modifier = Modifier.padding(pad))
-
-            is UiState.Success -> ReportBody(state.data, onSeeCourses, Modifier.padding(pad))
+            is UiState.Loading, UiState.Idle -> LoadingBox(message = "체력 기준표와 대조하는 중...")
+            is UiState.Error -> ErrorBox(state.message, onRetry = onRetry)
+            is UiState.Success -> ReportBody(state.data, onSeeCourses, onBack)
         }
     }
 }
@@ -69,116 +58,181 @@ fun ReportScreen(
 private fun ReportBody(
     r: DiagnoseResponse,
     onSeeCourses: () -> Unit,
-    modifier: Modifier = Modifier,
+    onBack: () -> Unit,
 ) {
     Column(
-        modifier
+        Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
     ) {
+        BrandBar()
+        Eyebrow("진단 리포트")
         VSpace(8)
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            ),
-        ) {
-            Column(Modifier.padding(20.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom,
+
+        HeroCard {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ScoreRing(r.totalScore)
+                    Column(Modifier.padding(start = 18.dp)) {
+                        Text(
+                            "종합 점수",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White.copy(alpha = 0.52f),
+                        )
+                        VSpace(3)
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                "${r.totalScore}",
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = (-1.2).sp,
+                                color = Color.White,
+                            )
+                            Text(
+                                "점",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 2.dp),
+                            )
+                        }
+                        Text(
+                            "4개 요인 백분위 평균",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.5f),
+                        )
+                    }
+                }
+                VSpace(16)
+                Text(r.imbalanceType, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                VSpace(8)
+                Text(
+                    r.imbalanceDesc,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.72f),
+                )
+                VSpace(14)
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White.copy(alpha = 0.07f))
+                        .padding(horizontal = 11.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        r.imbalanceType,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        "${r.totalScore}점",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                        "${if (r.gender == "M") "남성" else "여성"} · ${r.ageBand.replace("s", "대")} 기준표와 대조",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.6f),
                     )
                 }
-                VSpace(8)
-                Text(r.imbalanceDesc, style = MaterialTheme.typography.bodyMedium)
-                VSpace(8)
+            }
+        }
+
+        VSpace(12)
+        AppCard(padding = 18) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
+            ) { RadarChart(r.factors, r.weakFactors) }
+        }
+
+        SectionHeader("체력요인별 순위")
+        AppCard {
+            Column {
+                r.factors.forEach { f ->
+                    FactorBar(f.label, f.percentile, f.grade, f.factor in r.weakFactors)
+                }
+                VSpace(12)
+                val weakNames = r.factors.filter { it.factor in r.weakFactors }
+                    .joinToString("·") { it.label }
                 Text(
-                    "${if (r.gender == "M") "남성" else "여성"} · ${r.ageBand.replace("s", "대")} 기준",
-                    style = MaterialTheme.typography.labelMedium,
+                    "같은 성별·나이대 100명과 비교한 순위입니다. 숫자가 작을수록 좋습니다.\n" +
+                        "$weakNames 이(가) 가장 뒤처진 두 요인이며, 추천 강좌는 이 둘을 기준으로 고릅니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Brand.Muted2,
                 )
             }
         }
 
-        VSpace(20)
-        Text("체력요인별 백분위", fontWeight = FontWeight.Bold)
-        VSpace(4)
-        r.factors.forEach { f ->
-            PercentileBar(
-                label = f.label,
-                percentile = f.percentile,
-                grade = f.grade,
-                highlight = f.factor in r.weakFactors,
-            )
+        SectionHeader("측정 항목 상세")
+        AppCard {
+            Column {
+                r.items.forEachIndexed { index, item ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 13.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(
+                                item.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "${item.value}${item.unit}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Brand.Muted2,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                "100명 중 ${100 - item.percentile}등",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                item.grade,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Brand.tone(item.percentile),
+                            )
+                        }
+                    }
+                    if (index != r.items.lastIndex) HorizontalDivider(color = Brand.Line)
+                }
+            }
         }
-        VSpace(8)
-        Text(
-            "⚠ 표시된 ${r.factors.filter { it.factor in r.weakFactors }.joinToString("·") { it.label }} 이(가) " +
-                "가장 뒤처진 두 요인입니다. 추천 강좌는 이 두 가지를 기준으로 고릅니다.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
-        VSpace(20)
-        HorizontalDivider()
-        VSpace(12)
-        Text("측정 항목 상세", fontWeight = FontWeight.Bold)
-        VSpace(8)
-        r.items.forEach { item ->
+        SectionHeader("체질량지수")
+        AppCard {
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column {
-                    Text(item.label, style = MaterialTheme.typography.bodyMedium)
+                    Text("BMI", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "${item.value}${item.unit}",
+                        if (r.bmi.inNormalRange) "정상 구간입니다" else "정상 구간(18.5~23)을 벗어났습니다",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Brand.Muted2,
                     )
                 }
+                val color = if (r.bmi.inNormalRange) Brand.MintDeep else Brand.Coral
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("100명 중 ${100 - item.percentile}등", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        item.grade,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        "${r.bmi.value}",
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = (-0.7).sp,
+                        color = color,
+                    )
+                    Text(
+                        r.bmi.category,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = color,
                     )
                 }
-            }
-        }
-
-        VSpace(12)
-        Card(Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("체질량지수(BMI)")
-                Text(
-                    "${r.bmi.value}  ·  ${r.bmi.category}",
-                    fontWeight = FontWeight.Bold,
-                    color = if (r.bmi.inNormalRange) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.error,
-                )
             }
         }
 
         VSpace(24)
-        Button(onClick = onSeeCourses, modifier = Modifier.fillMaxWidth()) {
-            Text("이 약점에 맞는 강좌 보기")
-        }
-        VSpace(32)
+        PrimaryButton("이 약점에 맞는 강좌 보기", onSeeCourses)
+        VSpace(9)
+        GhostButton("홈으로", onBack)
+        VSpace(40)
     }
 }

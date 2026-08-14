@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.FitBalance" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- 앱 시작 시 흰 화면이 번쩍이지 않도록 창 배경을 앱 배경색과 맞춘다. -->
+    <color name="app_bg">#F2F5F4</color>
+
+    <style name="Theme.FitBalance" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/app_bg</item>
+        <item name="android:statusBarColor">@color/app_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 </resources>

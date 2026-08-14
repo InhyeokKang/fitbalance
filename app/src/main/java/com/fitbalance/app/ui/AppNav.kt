@@ -46,6 +46,7 @@ fun AppNav(vm: AppViewModel = viewModel()) {
                     vm.recommend()
                     nav.navigate(Routes.RECOMMEND)
                 },
+                onReport = { nav.navigate(Routes.REPORT) },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
             )
         }
@@ -64,7 +65,8 @@ fun AppNav(vm: AppViewModel = viewModel()) {
         composable(Routes.REPORT) {
             ReportScreen(
                 state = diagnosis,
-                onBack = { nav.popBackStack() },
+                // 리포트의 "홈으로"는 측정 화면을 건너뛰고 홈까지 돌아간다.
+                onBack = { nav.popBackStack(Routes.HOME, inclusive = false) },
                 onRetry = { nav.popBackStack() },
                 onSeeCourses = {
                     vm.recommend()
@@ -76,7 +78,7 @@ fun AppNav(vm: AppViewModel = viewModel()) {
         composable(Routes.RECOMMEND) {
             RecommendScreen(
                 state = recommendation,
-                onBack = { nav.popBackStack() },
+                onBack = { nav.popBackStack(Routes.HOME, inclusive = false) },
                 onRetry = { vm.recommend() },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
                 onCourseClick = { id -> nav.navigate(Routes.course(id)) },
