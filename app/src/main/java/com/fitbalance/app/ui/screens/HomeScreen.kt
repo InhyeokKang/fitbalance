@@ -31,8 +31,13 @@ import com.fitbalance.app.data.DiagnoseResponse
 import com.fitbalance.app.ui.components.AppCard
 import com.fitbalance.app.ui.components.Chip
 import com.fitbalance.app.ui.components.GhostButton
+import com.fitbalance.app.ui.components.HSpace
 import com.fitbalance.app.ui.components.HeroCard
+import com.fitbalance.app.ui.components.Mascot
+import com.fitbalance.app.ui.components.MascotMood
 import com.fitbalance.app.ui.components.PrimaryButton
+import com.fitbalance.app.ui.components.Wordmark
+import com.fitbalance.app.ui.components.moodOfScore
 import com.fitbalance.app.ui.components.RadarChart
 import com.fitbalance.app.ui.components.ScoreRing
 import com.fitbalance.app.ui.components.VSpace
@@ -77,12 +82,8 @@ fun BrandBar(onSettings: (() -> Unit)? = null) {
                     .clip(CircleShape)
                     .background(Brand.PrimaryGradient)
             )
-            Text(
-                "  핏밸런스",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.5).sp,
-            )
+            HSpace(7)
+            Wordmark()
         }
         if (onSettings != null) {
             Box(
@@ -119,33 +120,40 @@ private fun EmptyHome(onMeasure: () -> Unit) {
     VSpace(22)
 
     HeroCard {
-        Column {
-            Text("STEP 1", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.52f))
-            VSpace(6)
-            Text(
-                "3분이면 끝납니다",
-                style = MaterialTheme.typography.headlineSmall,
-                color = Color.White,
-            )
-            VSpace(8)
-            Text(
-                "측정값 8가지를 넣으면 근력·유연성·심폐지구력·평형성 중\n어디가 무너졌는지 바로 나옵니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.72f),
-            )
-            VSpace(14)
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.White.copy(alpha = 0.07f))
-                    .padding(horizontal = 11.dp, vertical = 5.dp)
-            ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    "체력 기준표 200행 · 강좌 30개 연동됨",
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.6f),
+                    "STEP 1",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.52f),
                 )
+                VSpace(6)
+                Text(
+                    "3분이면 끝납니다",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                )
+                VSpace(8)
+                Text(
+                    "측정값 8가지만 넣으면\n어디가 무너졌는지 바로 나옵니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.72f),
+                )
+                VSpace(14)
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White.copy(alpha = 0.07f))
+                        .padding(horizontal = 11.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        "기준표 200행 · 강좌 30개",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.6f),
+                    )
+                }
             }
+            Mascot(MascotMood.WORKOUT, size = 104, bodyColor = Brand.Mint)
         }
     }
 
@@ -198,13 +206,23 @@ private fun DiagnosedHome(
                 }
             }
             VSpace(16)
-            Text(d.imbalanceType, style = MaterialTheme.typography.headlineSmall, color = Color.White)
-            VSpace(8)
-            Text(
-                d.imbalanceDesc,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.72f),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        d.imbalanceType,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White,
+                    )
+                    VSpace(8)
+                    Text(
+                        d.imbalanceDesc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.72f),
+                    )
+                }
+                HSpace(6)
+                Mascot(moodOfScore(d.totalScore), size = 84, bodyColor = Brand.Mint)
+            }
         }
     }
 

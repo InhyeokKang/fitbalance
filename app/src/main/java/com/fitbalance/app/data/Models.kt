@@ -77,6 +77,8 @@ data class Course(
     @SerializedName("course_id") val courseId: String,
     val title: String,
     val facility: String,
+    /** 시설 주소. 참조표에 없으면 null이며, 이때 화면은 시설명만 보여준다. */
+    val address: String? = null,
     val sport: String,
     val weekday: String,
     @SerializedName("start_time") val startTime: String,

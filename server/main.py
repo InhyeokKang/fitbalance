@@ -97,6 +97,10 @@ def load_csv_to_sqlite() -> tuple[int, int]:
             lat REAL, lng REAL, weekday TEXT, start_time TEXT, sport TEXT,
             tag_strength INTEGER, tag_flex INTEGER, tag_cardio INTEGER, tag_balance INTEGER
         );
+        DROP TABLE IF EXISTS facility_addresses;
+        CREATE TABLE facility_addresses (
+            facility TEXT PRIMARY KEY, address TEXT
+        );
         CREATE TABLE IF NOT EXISTS diagnoses (
             diagnosis_id TEXT PRIMARY KEY, device_id TEXT, measured_at TEXT,
             gender TEXT, age_band TEXT, payload TEXT
@@ -141,6 +145,27 @@ def load_csv_to_sqlite() -> tuple[int, int]:
             for r in reader
         ]
     cur.executemany("INSERT INTO courses VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", course_rows)
+
+    # 시설 주소 참조표. courses.csv 스키마가 계약으로 고정돼 있어 별도 파일로 둔다.
+    # 없거나 일부 시설이 빠져 있어도 동작해야 한다(그 시설은 주소 없이 표시).
+    address_path = DATA_DIR / "facility_addresses.csv"
+    if address_path.exists():
+        with open(address_path, encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            expected = ["facility", "address"]
+            if reader.fieldnames != expected:
+                raise RuntimeError(
+                    f"facility_addresses.csv 열 구성이 다릅니다: {reader.fieldnames} (기대: {expected})"
+                )
+            address_rows = [
+                (r["facility"], r["address"].strip())
+                for r in reader
+                if r["address"].strip()
+            ]
+        cur.executemany("INSERT OR REPLACE INTO facility_addresses VALUES (?,?)", address_rows)
+        missing = {c[2] for c in course_rows} - {a[0] for a in address_rows}
+        if missing:
+            print(f"[주소 없음] {len(missing)}개 시설: {', '.join(sorted(missing))}")
 
     conn.commit()
     conn.close()
@@ -399,8 +424,11 @@ def diagnose(req: DiagnoseRequest):
 
 
 def _course_dict(r: sqlite3.Row) -> dict:
+    keys = r.keys()
     return {
         "course_id": r["course_id"], "title": r["title"], "facility": r["facility"],
+        # 주소는 참조표에 없으면 None. 앱은 이때 시설명만 보여준다.
+        "address": (r["address"] if "address" in keys else None) or None,
         "sport": r["sport"], "weekday": r["weekday"], "start_time": r["start_time"],
         "lat": r["lat"], "lng": r["lng"],
         "tags": {
@@ -433,7 +461,7 @@ def recommend(req: RecommendRequest):
         user_vec = [1.0 if f in weak else 0.3 for f in FACTOR_ORDER]
 
         scored = []
-        for r in conn.execute("SELECT * FROM courses").fetchall():
+        for r in conn.execute("SELECT c.*, fa.address AS address FROM courses c LEFT JOIN facility_addresses fa ON fa.facility = c.facility").fetchall():
             course_vec = [r["tag_strength"], r["tag_flex"], r["tag_cardio"], r["tag_balance"]]
             if sum(course_vec) == 0:
                 continue
@@ -503,7 +531,7 @@ def list_courses(
 ):
     conn = _connect()
     try:
-        sql = "SELECT * FROM courses WHERE 1=1"
+        sql = "SELECT c.*, fa.address AS address FROM courses c LEFT JOIN facility_addresses fa ON fa.facility = c.facility WHERE 1=1"
         params: list = []
         if sport:
             sql += " AND sport LIKE ?"
@@ -532,7 +560,7 @@ def list_courses(
 def get_course(course_id: str):
     conn = _connect()
     try:
-        r = conn.execute("SELECT * FROM courses WHERE course_id=?", (course_id,)).fetchone()
+        r = conn.execute("SELECT c.*, fa.address AS address FROM courses c LEFT JOIN facility_addresses fa ON fa.facility = c.facility WHERE c.course_id=?", (course_id,)).fetchone()
         if r is None:
             raise HTTPException(status_code=404, detail=f"강좌를 찾을 수 없습니다: {course_id}")
         item = _course_dict(r)

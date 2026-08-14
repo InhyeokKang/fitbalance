@@ -34,6 +34,8 @@ import com.fitbalance.app.ui.components.ErrorBox
 import com.fitbalance.app.ui.components.Eyebrow
 import com.fitbalance.app.ui.components.GhostButton
 import com.fitbalance.app.ui.components.LoadingBox
+import com.fitbalance.app.ui.components.Mascot
+import com.fitbalance.app.ui.components.MascotMood
 import com.fitbalance.app.ui.components.PrimaryButton
 import com.fitbalance.app.ui.components.VSpace
 import com.fitbalance.app.ui.theme.Brand
@@ -150,6 +152,10 @@ private fun CourseCard(c: Course, rank: Int, onClick: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = Brand.Muted,
                     )
+                    c.address?.let {
+                        VSpace(2)
+                        Text(it, fontSize = 11.5.sp, color = Brand.Muted2)
+                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
@@ -203,7 +209,7 @@ private fun EmptyResult(hint: String?, onSettings: () -> Unit, onBack: () -> Uni
         Modifier.fillMaxWidth().padding(vertical = 44.dp, horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("🔍", fontSize = 34.sp)
+        Mascot(MascotMood.SEARCHING, size = 110)
         VSpace(10)
         Text(
             "조건에 맞는 강좌가 없습니다",

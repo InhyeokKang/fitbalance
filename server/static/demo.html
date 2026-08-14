@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>핏밸런스 — 개발용 미리보기</title>
+<title>fitbalance — 개발용 미리보기</title>
 <style>
   :root{
     --ink:#0C1112; --ink-2:#182124; --bg:#F2F5F4; --surface:#FFFFFF;
@@ -40,7 +40,9 @@
     padding:16px 20px 10px;position:sticky;top:0;z-index:20;
     background:linear-gradient(var(--bg) 72%, transparent);
   }
-  .brand{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:800;letter-spacing:-.03em}
+  .brand{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:800;letter-spacing:-.045em}
+  .brand .wm-a{color:var(--ink)}
+  .brand .wm-b{color:var(--mint-deep)}
   .brand .dot{
     width:9px;height:9px;border-radius:50%;
     background:linear-gradient(135deg,var(--mint),var(--mint-deep));
@@ -260,7 +262,7 @@
 <div class="phone">
   <div class="banner">개발용 브라우저 미리보기 · 실제 배포물은 안드로이드 앱입니다</div>
   <header>
-    <div class="brand"><span class="dot"></span>핏밸런스</div>
+    <div class="brand"><span class="dot"></span><span class="wm-a">fit</span><span class="wm-b">balance</span></div>
     <button class="icon-btn" onclick="go('settings')" aria-label="설정">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2" stroke-linecap="round">
@@ -279,12 +281,23 @@ if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem("device_id
 
 const FACTOR_LABEL = {strength:"근력", flex:"유연성", cardio:"심폐지구력", balance:"평형성"};
 
+// [이름, 위도, 경도, 주소]. 좌표는 계산용이고 화면에는 주소만 내보낸다.
 const PRESETS = [
-  ["시청·광화문", 37.5665, 126.9780], ["강남역", 37.4979, 127.0276],
-  ["여의도", 37.5219, 126.9245],      ["판교", 37.3947, 127.1112],
-  ["홍대·마포", 37.5563, 126.9236],   ["잠실", 37.5133, 127.1000],
-  ["성수·왕십리", 37.5445, 127.0557],
+  ["시청·광화문", 37.5665, 126.9780, "서울특별시 중구 세종대로 일대"],
+  ["강남역",      37.4979, 127.0276, "서울특별시 강남구 강남대로 일대"],
+  ["여의도",      37.5219, 126.9245, "서울특별시 영등포구 여의도동 일대"],
+  ["판교",        37.3947, 127.1112, "경기도 성남시 분당구 판교역로 일대"],
+  ["홍대·마포",   37.5563, 126.9236, "서울특별시 마포구 양화로 일대"],
+  ["잠실",        37.5133, 127.1000, "서울특별시 송파구 올림픽로 일대"],
+  ["성수·왕십리", 37.5445, 127.0557, "서울특별시 성동구 왕십리로 일대"],
 ];
+
+/** 좌표로 프리셋 주소를 찾는다. 못 찾으면 안내 문구를 돌려준다. */
+function addressOf(lat, lng){
+  const hit = PRESETS.find(([, la, ln]) =>
+    Math.abs(la - lat) < 0.0005 && Math.abs(ln - lng) < 0.0005);
+  return hit ? hit[3] : "선택한 지역 정보를 찾을 수 없습니다";
+}
 
 const FIELDS = [
   {k:"age",      label:"나이",                 unit:"세", min:19,  max:64,  hint:"만 19~64세",      sample:"34"},
@@ -315,6 +328,89 @@ function go(screen){ state.screen = screen; state.error = null; render(); window
 const tone = p => p >= 60 ? "var(--mint-deep)" : p >= 40 ? "var(--amber)" : "var(--coral)";
 
 // ---------------------------------------------------------------- 그래픽
+
+/**
+ * 마스코트. 앱(Compose Canvas)과 같은 형태를 SVG로 그린다.
+ * mood: happy | worried | proud | searching | workout
+ */
+function mascot(mood = "happy", size = 96, bodyColor = "var(--mint)"){
+  const s = size, cx = s / 2;
+  const bodyW = s * 0.62, bodyH = s * 0.70, bodyTop = s * 0.16;
+  const eyeY = bodyTop + bodyH * 0.40, eyeDx = bodyW * 0.21;
+  const legY = bodyTop + bodyH - s * 0.01;
+  const armY = bodyTop + bodyH * 0.60;
+  const armDown = mood === "workout" ? s * 0.10 : s * 0.05;
+  const ink = "var(--ink)";
+  const arcEyes = mood === "happy" || mood === "proud" || mood === "workout";
+
+  const legs = [-1, 1].map(d => `<line x1="${cx + d * bodyW * 0.20}" y1="${legY}"
+      x2="${cx + d * bodyW * 0.26}" y2="${legY + s * 0.09}"
+      stroke="${bodyColor}" stroke-width="${s * 0.055}" stroke-linecap="round"/>`).join("");
+
+  const arms = [-1, 1].map(d => `<line x1="${cx + d * bodyW * 0.44}" y1="${armY}"
+      x2="${cx + d * bodyW * 0.56}" y2="${armY + armDown}"
+      stroke="${bodyColor}" stroke-width="${s * 0.048}" stroke-linecap="round"/>`).join("");
+
+  const eyes = arcEyes
+    ? [-1, 1].map(d => `<path d="M ${cx + d * eyeDx - s * 0.052} ${eyeY + s * 0.012}
+         q ${s * 0.052} ${-s * 0.055} ${s * 0.104} 0"
+         fill="none" stroke="${ink}" stroke-width="${s * 0.032}" stroke-linecap="round"/>`).join("")
+    : [-1, 1].map(d => `<circle cx="${cx + d * eyeDx}" cy="${eyeY}" r="${s * 0.030}" fill="${ink}"/>`
+        + (mood === "worried"
+          ? `<line x1="${cx + d * eyeDx - d * s * 0.045}" y1="${eyeY - s * 0.085}"
+               x2="${cx + d * eyeDx + d * s * 0.030}" y2="${eyeY - s * 0.055}"
+               stroke="${ink}" stroke-width="${s * 0.024}" stroke-linecap="round"/>` : "")).join("");
+
+  const blush = [-1, 1].map(d => `<ellipse cx="${cx + d * bodyW * 0.32}" cy="${eyeY + s * 0.072}"
+      rx="${s * 0.045}" ry="${s * 0.028}" fill="var(--coral)" opacity=".38"/>`).join("");
+
+  const mouthY = eyeY + s * 0.10;
+  const mouth = mood === "worried"
+    ? `<path d="M ${cx - s * 0.045} ${mouthY + s * 0.055} q ${s * 0.045} ${-s * 0.05} ${s * 0.09} 0"
+         fill="none" stroke="${ink}" stroke-width="${s * 0.026}" stroke-linecap="round"/>`
+    : `<path d="M ${cx - s * 0.05} ${mouthY} q ${s * 0.05} ${s * 0.055} ${s * 0.10} 0"
+         fill="none" stroke="${ink}" stroke-width="${s * 0.026}" stroke-linecap="round"/>`;
+
+  let prop = "";
+  if (mood === "worried") {
+    const x = cx + bodyW * 0.46, y = bodyTop + bodyH * 0.16, r = s * 0.042;
+    prop = `<path d="M ${x} ${y - r * 1.7} C ${x + r * 1.2} ${y - r * 0.2}, ${x + r} ${y + r}, ${x} ${y + r}
+              C ${x - r} ${y + r}, ${x - r * 1.2} ${y - r * 0.2}, ${x} ${y - r * 1.7} Z" fill="#6EC6FF"/>`;
+  } else if (mood === "proud") {
+    const star = (x, y, r) => `<path d="M ${x} ${y - r} Q ${x + r * 0.18} ${y - r * 0.18} ${x + r} ${y}
+        Q ${x + r * 0.18} ${y + r * 0.18} ${x} ${y + r} Q ${x - r * 0.18} ${y + r * 0.18} ${x - r} ${y}
+        Q ${x - r * 0.18} ${y - r * 0.18} ${x} ${y - r} Z" fill="var(--amber)"/>`;
+    prop = star(cx + bodyW * 0.52, bodyTop + bodyH * 0.10, s * 0.075)
+         + star(cx - bodyW * 0.55, bodyTop + bodyH * 0.30, s * 0.050);
+  } else if (mood === "searching") {
+    const x = cx + bodyW * 0.50, y = bodyTop + bodyH * 0.62, r = s * 0.085;
+    prop = `<g transform="rotate(20 ${x} ${y})">
+        <line x1="${x + r * 0.7}" y1="${y + r * 0.7}" x2="${x + r * 1.9}" y2="${y + r * 1.9}"
+          stroke="${ink}" stroke-width="${s * 0.030}" stroke-linecap="round"/>
+        <circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity=".85"/>
+        <circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${ink}" stroke-width="${s * 0.026}"/>
+      </g>`;
+  } else if (mood === "workout") {
+    const y = armY + s * 0.10, half = bodyW * 0.56, pw = s * 0.075, ph = s * 0.165;
+    prop = `<line x1="${cx - half}" y1="${y}" x2="${cx + half}" y2="${y}"
+        stroke="${ink}" stroke-width="${s * 0.034}" stroke-linecap="round"/>`
+      + [-1, 1].map(d => `<rect x="${cx + d * half - pw / 2}" y="${y - ph / 2}"
+          width="${pw}" height="${ph}" rx="${s * 0.026}" fill="${ink}"/>`).join("");
+  }
+
+  return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" style="flex:none">
+    <ellipse cx="${cx}" cy="${bodyTop + bodyH + s * 0.045}" rx="${bodyW * 0.40}" ry="${s * 0.028}"
+      fill="#000" opacity=".07"/>
+    ${legs}${arms}
+    <ellipse cx="${cx}" cy="${bodyTop + bodyH / 2}" rx="${bodyW / 2}" ry="${bodyH / 2}" fill="${bodyColor}"/>
+    <ellipse cx="${cx}" cy="${bodyTop + bodyH * 0.62}" rx="${bodyW * 0.26}" ry="${bodyH * 0.20}"
+      fill="#fff" opacity=".22"/>
+    ${eyes}${blush}${mouth}${prop}
+  </svg>`;
+}
+
+/** 종합 점수로 표정을 고른다. 앱의 moodOfScore와 같은 기준. */
+const moodOfScore = score => score >= 70 ? "proud" : score >= 55 ? "happy" : "worried";
 
 /** 종합 점수 링 (다크 히어로 위에 얹는다) */
 function scoreRing(score, size = 78){
@@ -472,10 +568,15 @@ function screenHome(){
     <h2 class="title">앉아서 일하는 몸,<br>어디가 무너졌는지<br>부터 봅니다</h2>
     <p class="lead">국민체력100 기준표로 체력을 진단하고,<br>퇴근길 동선 안의 공공 체육 강좌를 추천받으세요.</p>
     <div class="hero">
-      <div class="label">STEP 1</div>
-      <h3>3분이면 끝납니다</h3>
-      <p>측정값 8가지를 넣으면 근력·유연성·심폐지구력·평형성 중<br>어디가 무너졌는지 바로 나옵니다.</p>
-      <div class="meta">체력 기준표 200행 · 강좌 30개 연동됨</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div class="label">STEP 1</div>
+          <h3>3분이면 끝납니다</h3>
+          <p>측정값 8가지만 넣으면<br>어디가 무너졌는지 바로 나옵니다.</p>
+          <div class="meta">기준표 200행 · 강좌 30개</div>
+        </div>
+        ${mascot("workout", 104)}
+      </div>
     </div>
     <div class="btn-stack">
       <button class="btn primary" onclick="go('measure')">체력 측정 시작하기</button>
@@ -495,8 +596,13 @@ function screenHome(){
           <div class="ring-sub">${d.gender === "M" ? "남성" : "여성"} · ${esc(d.age_band.replace("s","대"))} 기준</div>
         </div>
       </div>
-      <h3 style="margin-top:16px">${esc(d.imbalance_type)}</h3>
-      <p>${esc(d.imbalance_desc)}</p>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:16px">
+        <div style="flex:1;min-width:0">
+          <h3 style="margin:0">${esc(d.imbalance_type)}</h3>
+          <p>${esc(d.imbalance_desc)}</p>
+        </div>
+        ${mascot(moodOfScore(d.total_score), 84)}
+      </div>
     </div>
 
     <div class="card radar-card">
@@ -572,8 +678,13 @@ function screenReport(){
           <div class="ring-sub">4개 요인 백분위 평균</div>
         </div>
       </div>
-      <h3 style="margin-top:16px">${esc(d.imbalance_type)}</h3>
-      <p>${esc(d.imbalance_desc)}</p>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:16px">
+        <div style="flex:1;min-width:0">
+          <h3 style="margin:0">${esc(d.imbalance_type)}</h3>
+          <p>${esc(d.imbalance_desc)}</p>
+        </div>
+        ${mascot(moodOfScore(d.total_score), 84)}
+      </div>
       <div class="meta">${d.gender === "M" ? "남성" : "여성"} · ${esc(d.age_band.replace("s","대"))} 기준표와 대조</div>
     </div>
 
@@ -639,7 +750,7 @@ function screenRecommend(){
 
   if (r.total === 0) return head + `
     <div class="empty">
-      <div class="emoji">🔍</div>
+      <div style="display:flex;justify-content:center;margin-bottom:6px">${mascot("searching", 110)}</div>
       <strong>조건에 맞는 강좌가 없습니다</strong>
       <p>${esc(r.hint || "최대 거리를 넓히거나 퇴근 시각을 조정해 보세요.")}</p>
       <button class="btn primary" onclick="go('settings')">조건 수정하기</button>
@@ -653,6 +764,8 @@ function screenRecommend(){
         <div style="min-width:0">
           <h3>${esc(c.title)}</h3>
           <div class="sub">${esc(c.facility)} · ${esc(c.sport)}</div>
+          ${c.address ? `<div class="sub" style="color:var(--muted-2);margin-top:2px">
+            ${esc(c.address)}</div>` : ""}
         </div>
         <div class="score">${Math.round(c.score * 100)}<small>매칭</small></div>
       </div>
@@ -678,6 +791,7 @@ function screenCourse(){
     <div class="hero">
       <div class="label">${esc(c.facility)}</div>
       <h3>${esc(c.title)}</h3>
+      ${c.address ? `<p style="margin-top:6px">${esc(c.address)}</p>` : ""}
       <div class="meta">${esc(c.weekday)}요일 ${esc(c.start_time)} 시작 · ${esc(c.sport)}</div>
     </div>
 
@@ -688,7 +802,7 @@ function screenCourse(){
       <div class="kv"><span class="k">일정</span><span class="v">${esc(c.weekday)}요일 ${esc(c.start_time)}</span></div>
       <div class="kv"><span class="k">시설</span><span class="v">${esc(c.facility)}</span></div>
       <div class="kv"><span class="k">종목</span><span class="v">${esc(c.sport)}</span></div>
-      <div class="kv"><span class="k">좌표</span><span class="v">${c.lat}, ${c.lng}</span></div>
+      ${c.address ? `<div class="kv"><span class="k">주소</span><span class="v">${esc(c.address)}</span></div>` : ""}
     </div>
 
     <div class="btn-stack">
@@ -713,12 +827,14 @@ function screenSettings(){
 
     <div class="card">
       <div class="field" style="margin-top:0">
-        <label><span>직장 위치</span><span class="unit">${s.workLat.toFixed(4)}, ${s.workLng.toFixed(4)}</span></label>
+        <label><span>직장 위치</span></label>
         ${presetRow("work")}
+        <div class="msg">${esc(addressOf(s.workLat, s.workLng))}</div>
       </div>
       <div class="field">
-        <label><span>집 위치</span><span class="unit">${s.homeLat.toFixed(4)}, ${s.homeLng.toFixed(4)}</span></label>
+        <label><span>집 위치</span></label>
         ${presetRow("home")}
+        <div class="msg">${esc(addressOf(s.homeLat, s.homeLng))}</div>
       </div>
       <div class="field">
         <label><span>퇴근 시각</span><span class="unit">HH:MM</span></label>

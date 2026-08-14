@@ -109,7 +109,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun loadCourse(courseId: String) {
         _courseDetail.value = UiState.Loading
         viewModelScope.launch {
-            _courseDetail.value = runCatchingApi { ApiClient.service.course(courseId) }
+            val loaded = runCatchingApi { ApiClient.service.course(courseId) }
+            // 상세 API는 강좌 원본만 준다. 매칭 점수·거리·추천 이유는 추천 응답에만 있으므로
+            // 방금 본 목록에서 찾아 합쳐 준다. 목록을 거치지 않고 열었다면 그대로 둔다.
+            _courseDetail.value = if (loaded is UiState.Success) {
+                val fromList = (_recommendation.value as? UiState.Success)
+                    ?.data?.items?.firstOrNull { it.courseId == courseId }
+                UiState.Success(
+                    loaded.data.copy(
+                        distanceKm = loaded.data.distanceKm ?: fromList?.distanceKm,
+                        score = loaded.data.score ?: fromList?.score,
+                        matchReason = loaded.data.matchReason ?: fromList?.matchReason,
+                    )
+                )
+            } else loaded
         }
     }
 

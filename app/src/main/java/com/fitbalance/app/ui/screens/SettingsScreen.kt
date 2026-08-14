@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -42,11 +44,14 @@ import com.fitbalance.app.ui.components.AppCard
 import com.fitbalance.app.ui.components.Eyebrow
 import com.fitbalance.app.ui.components.GhostButton
 import com.fitbalance.app.ui.components.PrimaryButton
+import com.fitbalance.app.ui.components.RoundSliderThumb
 import com.fitbalance.app.ui.components.VSpace
 import com.fitbalance.app.ui.theme.Brand
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+// Slider의 thumb 교체가 아직 실험적 API다. 기본 손잡이가 세로 막대라 직접 그려 쓴다.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     current: Settings,
@@ -78,14 +83,16 @@ fun SettingsScreen(
 
         AppCard(padding = 18) {
             Column {
-                FieldLabel("직장 위치", "%.4f, %.4f".format(workLat, workLng))
+                FieldLabel("직장 위치")
                 VSpace(8)
                 PresetRow(workLat, workLng) { p -> workLat = p.lat; workLng = p.lng }
+                AddressLine(workLat, workLng)
 
                 VSpace(18)
-                FieldLabel("집 위치", "%.4f, %.4f".format(homeLat, homeLng))
+                FieldLabel("집 위치")
                 VSpace(8)
                 PresetRow(homeLat, homeLng) { p -> homeLat = p.lat; homeLng = p.lng }
+                AddressLine(homeLat, homeLng)
 
                 VSpace(18)
                 FieldLabel("퇴근 시각", "HH:MM")
@@ -123,10 +130,22 @@ fun SettingsScreen(
                     onValueChange = { maxKm = (it * 2).roundToInt() / 2f },
                     valueRange = 0.5f..10f,
                     colors = SliderDefaults.colors(
-                        thumbColor = Brand.MintDeep,
                         activeTrackColor = Brand.MintDeep,
                         inactiveTrackColor = Brand.Line,
                     ),
+                    thumb = { RoundSliderThumb() },
+                    // 트랙 끝의 기본 정지 표시 점은 이 디자인에 불필요해 끈다.
+                    track = { sliderState ->
+                        SliderDefaults.Track(
+                            sliderState = sliderState,
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = Brand.MintDeep,
+                                inactiveTrackColor = Brand.Line,
+                            ),
+                            drawStopIndicator = null,
+                            modifier = Modifier.height(6.dp),
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
@@ -175,7 +194,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun FieldLabel(label: String, value: String, highlight: Boolean = false) {
+private fun FieldLabel(label: String, value: String? = null, highlight: Boolean = false) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -187,13 +206,29 @@ private fun FieldLabel(label: String, value: String, highlight: Boolean = false)
             fontWeight = FontWeight.SemiBold,
             color = Brand.Muted,
         )
-        Text(
-            value,
-            fontSize = 11.sp,
-            fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
-            color = if (highlight) Brand.MintDeep else Brand.Muted2,
-        )
+        if (value != null) {
+            Text(
+                value,
+                fontSize = 11.sp,
+                fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
+                color = if (highlight) Brand.MintDeep else Brand.Muted2,
+            )
+        }
     }
+}
+
+/** 고른 지역의 주소. 좌표는 내부 계산용이라 화면에 내보내지 않는다. */
+@Composable
+private fun AddressLine(lat: Double, lng: Double) {
+    val preset = PLACE_PRESETS.firstOrNull {
+        abs(it.lat - lat) < 0.0005 && abs(it.lng - lng) < 0.0005
+    }
+    VSpace(7)
+    Text(
+        preset?.address ?: "선택한 지역 정보를 찾을 수 없습니다",
+        fontSize = 11.5.sp,
+        color = Brand.Muted2,
+    )
 }
 
 /** 지도 화면이 이번 범위 밖이라, 좌표를 프리셋 칩으로 고른다. */

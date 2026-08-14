@@ -31,7 +31,9 @@ import com.fitbalance.app.ui.components.FactorBar
 import com.fitbalance.app.ui.components.GhostButton
 import com.fitbalance.app.ui.components.HeroCard
 import com.fitbalance.app.ui.components.LoadingBox
+import com.fitbalance.app.ui.components.Mascot
 import com.fitbalance.app.ui.components.PrimaryButton
+import com.fitbalance.app.ui.components.moodOfScore
 import com.fitbalance.app.ui.components.RadarChart
 import com.fitbalance.app.ui.components.ScoreRing
 import com.fitbalance.app.ui.components.SectionHeader
@@ -106,13 +108,22 @@ private fun ReportBody(
                     }
                 }
                 VSpace(16)
-                Text(r.imbalanceType, style = MaterialTheme.typography.headlineSmall, color = Color.White)
-                VSpace(8)
-                Text(
-                    r.imbalanceDesc,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.72f),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            r.imbalanceType,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = Color.White,
+                        )
+                        VSpace(8)
+                        Text(
+                            r.imbalanceDesc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.72f),
+                        )
+                    }
+                    Mascot(moodOfScore(r.totalScore), size = 84, bodyColor = Brand.Mint)
+                }
                 VSpace(14)
                 Box(
                     Modifier

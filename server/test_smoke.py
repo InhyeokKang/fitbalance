@@ -31,7 +31,9 @@ def test_demo_page_served():
     with TestClient(app) as c:
         r = c.get("/demo")
         assert r.status_code == 200
-        assert "핏밸런스" in r.text
+        # 브랜드 표기는 소문자 영문 워드마크로 통일했다.
+        assert "fitbalance" in r.text
+        assert "핏밸런스" not in r.text
 
 
 def test_diagnose_returns_percentiles_and_weak_factors():
@@ -115,3 +117,24 @@ def test_course_detail_and_404():
         assert b["title"] == "저녁 요가 (중급)"
         assert b["apply_url"].startswith("https://")
         assert c.get("/api/v1/courses/ZZZZ").status_code == 404
+
+
+def test_address_is_joined_everywhere():
+    """좌표 대신 주소를 보여줘야 하므로, 세 경로 모두에 address가 실려야 한다."""
+    with TestClient(app) as c:
+        detail = c.get("/api/v1/courses/C012").json()
+        assert detail["address"], "상세에 주소가 없습니다"
+        assert detail["address"].startswith("서울")
+
+        listed = c.get("/api/v1/courses").json()["items"]
+        assert all(i["address"] for i in listed), "목록에 주소 없는 강좌가 있습니다"
+
+        rec = c.post("/api/v1/recommend", json={
+            "device_id": "addr-test",
+            "weak_factors": ["flex", "balance"],
+            "work_lat": 37.5665, "work_lng": 126.9780,
+            "home_lat": 37.4979, "home_lng": 127.0276,
+            "leave_time": "18:30", "max_distance_km": 5.0,
+        }).json()
+        assert rec["total"] >= 1
+        assert all(i["address"] for i in rec["items"]), "추천에 주소 없는 강좌가 있습니다"

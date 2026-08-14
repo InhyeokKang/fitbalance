@@ -3,6 +3,7 @@ package com.fitbalance.app.ui.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,9 +36,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -54,6 +59,29 @@ fun VSpace(dp: Int) = Spacer(Modifier.height(dp.dp))
 
 @Composable
 fun HSpace(dp: Int) = Spacer(Modifier.width(dp.dp))
+
+/**
+ * 브랜드 워드마크. 소문자 한 단어로 쓰되 fit / balance를 색으로 나눠 대비를 준다.
+ * 한글 표기 대신 이 워드마크를 앱 전체의 브랜드 표기로 쓴다.
+ */
+@Composable
+fun Wordmark(
+    modifier: Modifier = Modifier,
+    fontSize: Int = 17,
+    onDark: Boolean = false,
+) {
+    val head = if (onDark) Color.White else Brand.Ink
+    val tail = if (onDark) Brand.MintBright else Brand.MintDeep
+    Text(
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = head, fontWeight = FontWeight.ExtraBold)) { append("fit") }
+            withStyle(SpanStyle(color = tail, fontWeight = FontWeight.ExtraBold)) { append("balance") }
+        },
+        modifier = modifier,
+        fontSize = fontSize.sp,
+        letterSpacing = (-0.7).sp,
+    )
+}
 
 /** 섹션 위에 얹는 작은 대문자 라벨. */
 @Composable
@@ -390,6 +418,20 @@ fun FactorBar(
             )
         }
     }
+}
+
+/**
+ * 슬라이더 손잡이. Material3 기본값은 세로 막대라 나머지 둥근 디자인과 겉돌아 직접 그린다.
+ */
+@Composable
+fun RoundSliderThumb() {
+    Box(
+        Modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(Brand.Surface)
+            .border(2.5.dp, Brand.MintDeep, CircleShape)
+    )
 }
 
 @Composable

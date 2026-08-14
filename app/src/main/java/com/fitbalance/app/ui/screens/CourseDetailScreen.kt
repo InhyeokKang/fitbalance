@@ -75,6 +75,14 @@ fun CourseDetailScreen(
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = Color.White,
                             )
+                            c.address?.let {
+                                VSpace(6)
+                                Text(
+                                    it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.62f),
+                                )
+                            }
                             VSpace(14)
                             Box(
                                 Modifier
@@ -105,10 +113,14 @@ fun CourseDetailScreen(
                             DetailRow("일정", "${c.weekday}요일 ${c.startTime}")
                             HorizontalDivider(color = Brand.Line)
                             DetailRow("시설", c.facility)
+                            // 좌표는 사용자에게 의미가 없어 보여주지 않는다.
+                            // 주소가 아직 참조표에 없는 시설이면 이 줄을 통째로 생략한다.
+                            c.address?.let {
+                                HorizontalDivider(color = Brand.Line)
+                                DetailRow("주소", it)
+                            }
                             HorizontalDivider(color = Brand.Line)
                             DetailRow("종목", c.sport)
-                            HorizontalDivider(color = Brand.Line)
-                            DetailRow("좌표", "${c.lat}, ${c.lng}")
                             c.distanceKm?.let {
                                 HorizontalDivider(color = Brand.Line)
                                 DetailRow("퇴근 동선에서", "${it}km")
