@@ -25,13 +25,79 @@ New-Item -ItemType Directory -Force $Root | Out-Null
 $tmp = Join-Path $env:TEMP "fitbalance-setup"
 New-Item -ItemType Directory -Force $tmp | Out-Null
 
+# 진행률 표시줄을 끄면 Windows PowerShell에서 내려받기가 훨씬 빨라진다.
+$ProgressPreference = "SilentlyContinue"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+<#
+.SYNOPSIS
+파일을 내려받고 크기와 압축 무결성을 검증한다. 실패하면 다시 시도한다.
+
+큰 파일은 중간에 끊겨도 오류 없이 저장되는 일이 있어(잘린 zip),
+받은 크기를 Content-Length와 대조하고 zip을 열어 확인한 뒤에만 통과시킨다.
+#>
+function Get-VerifiedZip {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][string]$OutFile,
+        [int]$Retries = 3
+    )
+
+    Add-Type -AssemblyName System.Net.Http | Out-Null
+    Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
+
+    for ($attempt = 1; $attempt -le $Retries; $attempt++) {
+        $client = $null
+        $stream = $null
+        try {
+            Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
+
+            $client = New-Object System.Net.Http.HttpClient
+            $client.Timeout = [TimeSpan]::FromMinutes(30)
+
+            $resp = $client.GetAsync(
+                $Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead
+            ).GetAwaiter().GetResult()
+            $resp.EnsureSuccessStatusCode() | Out-Null
+
+            $expected = $resp.Content.Headers.ContentLength
+            $stream = [System.IO.File]::Create($OutFile)
+            $resp.Content.CopyToAsync($stream).GetAwaiter().GetResult()
+            $stream.Close(); $stream = $null
+
+            $actual = (Get-Item $OutFile).Length
+            if ($expected -and $actual -ne $expected) {
+                throw "받은 크기가 다릅니다 ($actual / $expected 바이트)"
+            }
+
+            # 잘린 zip은 여기서 걸러진다.
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($OutFile)
+            $zip.Dispose()
+
+            Write-Host ("      완료: {0:N1} MB" -f ($actual / 1MB))
+            return
+        }
+        catch {
+            Write-Host "      실패 ($attempt/$Retries): $($_.Exception.Message)"
+            if ($attempt -eq $Retries) {
+                throw "내려받기를 $Retries 번 시도했으나 실패했습니다: $Url"
+            }
+            Start-Sleep -Seconds 5
+        }
+        finally {
+            if ($stream) { $stream.Dispose() }
+            if ($client) { $client.Dispose() }
+        }
+    }
+}
+
 # 1) JDK 17 --------------------------------------------------------------
 if (Test-Path "$JdkDir\bin\java.exe") {
     Write-Host "[1/4] JDK 17 이미 설치됨: $JdkDir"
 } else {
     Write-Host "[1/4] JDK 17 내려받는 중 (약 190MB)..."
     $jdkZip = "$tmp\jdk17.zip"
-    Invoke-WebRequest -Uri $JdkUrl -OutFile $jdkZip
+    Get-VerifiedZip -Url $JdkUrl -OutFile $jdkZip
     Write-Host "      압축 푸는 중..."
     $extract = "$tmp\jdk-extract"
     Remove-Item -Recurse -Force $extract -ErrorAction SilentlyContinue
@@ -52,7 +118,7 @@ if (Test-Path $SdkManager) {
 } else {
     Write-Host "[2/4] Android 명령줄 도구 내려받는 중 (약 130MB)..."
     $cmdZip = "$tmp\cmdline-tools.zip"
-    Invoke-WebRequest -Uri $CmdUrl -OutFile $cmdZip
+    Get-VerifiedZip -Url $CmdUrl -OutFile $cmdZip
     $extract = "$tmp\cmdline-extract"
     Remove-Item -Recurse -Force $extract -ErrorAction SilentlyContinue
     Expand-Archive -Path $cmdZip -DestinationPath $extract -Force
