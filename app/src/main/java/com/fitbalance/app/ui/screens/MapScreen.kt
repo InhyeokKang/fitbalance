@@ -38,6 +38,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fitbalance.app.BuildConfig
 import com.fitbalance.app.data.Course
 import com.fitbalance.app.data.RecommendResponse
 import com.fitbalance.app.ui.Settings
@@ -168,13 +169,41 @@ private fun MapBody(
             return@Column
         }
 
-        MapCanvas(
-            courses = r.items,
-            settings = settings,
-            selected = selected,
-            onSelect = { selected = it },
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
+        // 카카오 지도를 먼저 시도하고, 실패하면 도식 지도로 넘어간다.
+        // 시연 중 빈 화면이 뜨지 않게 하려는 안전장치다.
+        var mapError by remember { mutableStateOf<String?>(null) }
+        val useKakao = KakaoMapState.available && mapError == null
+        val fallbackReason = mapError ?: KakaoMapState.reason.takeIf { !KakaoMapState.available }
+
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            if (useKakao) {
+                KakaoCourseMap(
+                    courses = r.items,
+                    settings = settings,
+                    selected = selected,
+                    onSelect = { selected = it },
+                    onFailed = { mapError = it },
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp)),
+                )
+            } else {
+                MapCanvas(
+                    courses = r.items,
+                    settings = settings,
+                    selected = selected,
+                    onSelect = { selected = it },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+        fallbackReason?.let {
+            VSpace(8)
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = Brand.Muted2,
+            )
+        }
 
         VSpace(12)
         selected?.let { c ->

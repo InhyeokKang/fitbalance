@@ -15,6 +15,9 @@ val localProps = Properties().apply {
 val debugBaseUrl: String = localProps.getProperty("BASE_URL_DEBUG") ?: "http://10.0.2.2:8000/"
 val releaseBaseUrl: String = localProps.getProperty("BASE_URL_RELEASE") ?: debugBaseUrl
 
+// 카카오 지도 네이티브 앱 키. 없으면 빈 문자열이고, 앱은 자체 도식 지도로 넘어간다.
+val kakaoMapKey: String = localProps.getProperty("KAKAO_MAP_KEY").orEmpty()
+
 android {
     namespace = "com.fitbalance.app"
     compileSdk = 35
@@ -25,6 +28,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
+
+        buildConfigField("String", "KAKAO_MAP_KEY", "\"$kakaoMapKey\"")
     }
 
     buildTypes {
@@ -68,6 +73,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+
+    implementation("com.kakao.maps.open:android:2.12.8")
 
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")

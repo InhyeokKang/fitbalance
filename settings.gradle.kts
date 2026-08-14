@@ -17,6 +17,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // 카카오 지도 SDK는 카카오 자체 저장소에만 올라온다.
+        maven("https://devrepo.kakao.com/nexus/content/groups/public/")
     }
 }
 
