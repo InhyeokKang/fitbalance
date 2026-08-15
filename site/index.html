@@ -206,6 +206,130 @@ footer {
 footer .wrap { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 footer a { color: var(--muted); }
 
+/* ── 화면 쇼케이스 ────────────────────────────────────── */
+.showcase {
+  background: linear-gradient(160deg, #0B1112 0%, var(--ink) 50%, #0C1D1A 100%);
+  color: #fff;
+  padding: 78px 0 104px;
+  position: relative;
+  overflow: hidden;
+}
+/* 뒤로 은은하게 깔리는 민트 광. 레퍼런스의 어두운 배경 느낌을 낸다. */
+.showcase::before {
+  content: ""; position: absolute; inset: -20% 30% auto -10%;
+  width: 720px; height: 720px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,214,143,.13), transparent 62%);
+  pointer-events: none;
+}
+.showcase .section-label { color: var(--mint-bright); }
+.showcase h2 { color: #fff; }
+.showcase .lede { color: rgba(255,255,255,.66); }
+.showcase-inner {
+  position: relative; z-index: 1;
+  display: grid; grid-template-columns: 1fr 1.05fr; gap: 44px; align-items: center;
+}
+@media (max-width: 940px) {
+  .showcase-inner { grid-template-columns: 1fr; gap: 30px; }
+  .stage { height: clamp(330px, 72vw, 520px); }
+}
+
+/* 설명 목록 */
+.feat { list-style: none; margin: 26px 0 0; padding: 0; display: grid; gap: 18px; }
+.feat li { display: flex; gap: 14px; align-items: flex-start; }
+.feat .fi {
+  flex: none; width: 34px; height: 34px; border-radius: 11px;
+  background: rgba(0,214,143,.14); color: var(--mint-bright);
+  display: grid; place-items: center; font-size: 13px; font-weight: 800;
+}
+.feat h3 { margin: 0 0 3px; font-size: 15.5px; letter-spacing: -.02em; color: #fff; }
+.feat p { margin: 0; font-size: 13.5px; color: rgba(255,255,255,.6); line-height: 1.6; }
+
+/* 폰 목업 무대 */
+.stage {
+  position: relative;
+  /* 목업 3대가 겹쳐 서므로 폭에 따라 높이를 함께 줄인다.
+     화면 비율(540:1121)에 폭 비율을 곱한 값보다 넉넉해야 회전해도 안 잘린다. */
+  height: clamp(440px, 54vw, 690px);
+  perspective: 1400px;
+}
+
+.phone {
+  position: absolute;
+  /* 무대 폭에 맞춰 줄어든다. 세 대가 52%+38% = 90% 안에 들어온다. */
+  width: clamp(132px, 38%, 208px);
+  border-radius: 30px;
+  background: linear-gradient(150deg, #3A4145, #16191B 42%, #2A3033);
+  padding: 7px;
+  box-shadow:
+    0 32px 60px rgba(0,0,0,.55),
+    0 4px 14px rgba(0,0,0,.4),
+    inset 0 0 0 1px rgba(255,255,255,.09);
+  transform-style: preserve-3d;
+  transition: transform .5s cubic-bezier(.2,.7,.3,1);
+}
+.phone img {
+  display: block; width: 100%; border-radius: 24px; background: var(--bg);
+}
+/* 노치 */
+.phone::before {
+  content: ""; position: absolute; top: 13px; left: 50%;
+  transform: translateX(-50%);
+  width: 62px; height: 15px; border-radius: 10px;
+  background: #0A0D0E; z-index: 2;
+}
+/* 화면 위 유리 반사 */
+.phone::after {
+  content: ""; position: absolute; inset: 7px; border-radius: 24px;
+  background: linear-gradient(118deg, rgba(255,255,255,.16) 0%,
+              rgba(255,255,255,.03) 26%, transparent 46%);
+  pointer-events: none; z-index: 1;
+}
+
+/* 레퍼런스처럼 서로 다른 각도로 띄운다 */
+.phone-a { left: 0;   top: 8%; transform: rotate(-13deg) rotateY(11deg) scale(1.02); z-index: 3; }
+.phone-b { left: 26%; top: 0;   transform: rotate(6deg) rotateY(-8deg);  z-index: 2; }
+.phone-c { left: 52%; top: 11%; transform: rotate(-7deg) rotateY(9deg) scale(.96); z-index: 1; }
+.stage:hover .phone-a { transform: rotate(-10deg) rotateY(8deg) scale(1.05) translateY(-8px); }
+.stage:hover .phone-b { transform: rotate(4deg) rotateY(-6deg) translateY(-14px); }
+.stage:hover .phone-c { transform: rotate(-5deg) rotateY(7deg) scale(.99) translateY(-8px); }
+
+@media (max-width: 520px) {
+  .phone { border-radius: 22px; padding: 5px; }
+  .phone img { border-radius: 18px; }
+  .phone::after { inset: 5px; border-radius: 18px; }
+  .phone::before { width: 42px; height: 10px; top: 9px; }
+}
+
+/* 흐름을 보여 주는 정지 목업 두 장. 기울이지 않고 나란히 세운다. */
+.flow {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 28px; justify-items: center; margin-bottom: 8px;
+}
+@media (max-width: 620px) { .flow { grid-template-columns: 1fr; } }
+.flow-shot { margin: 0; text-align: center; }
+.phone-still {
+  position: static; width: clamp(190px, 52vw, 236px);
+  margin: 0 auto; transform: none;
+}
+.flow-shot figcaption {
+  margin-top: 14px; font-size: 13px; color: var(--muted); font-weight: 600;
+}
+
+/* 목업 위에 얹는 작은 설명 꼬리표 */
+.pin {
+  position: absolute; z-index: 5;
+  background: rgba(255,255,255,.94); color: var(--ink);
+  border-radius: 13px; padding: 8px 13px;
+  font-size: 12px; font-weight: 700; letter-spacing: -.02em;
+  box-shadow: 0 10px 26px rgba(0,0,0,.34);
+  white-space: nowrap;
+}
+.pin span { display: block; font-size: 10.5px; font-weight: 600; color: var(--muted2); }
+.pin-1 { left: -2%; top: 6%; }
+.pin-2 { right: -1%; top: 12%; }
+.pin-3 { left: 20%; bottom: 3%; }
+@media (max-width: 940px) { .pin { display: none; } }
+
 /* ── 마스코트 ─────────────────────────────────────────── */
 .mascot { display: block; overflow: visible; }
 @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
@@ -295,6 +419,7 @@ footer a { color: var(--muted); }
       <span class="wordmark"><b>fit</b><span>balance</span></span>
     </div>
     <nav class="nav">
+      <a href="#screens">화면</a>
       <a href="#download">다운로드</a>
       <a href="#how">쓰는 법</a>
       <a href="#data">공공데이터</a>
@@ -326,6 +451,66 @@ footer a { color: var(--muted); }
     </div>
   </div>
 </div>
+
+
+<section class="showcase" id="screens">
+  <div class="wrap showcase-inner">
+    <div>
+      <div class="section-label">SCREENS</div>
+      <h2>이렇게 보입니다</h2>
+      <p class="lede">
+        실제 앱 화면입니다. 지어낸 목업이 아니라 지금 받아서 켜면 나오는 그대로입니다.
+      </p>
+
+      <ul class="feat">
+        <li>
+          <span class="fi">1</span>
+          <div>
+            <h3>줄자와 초시계로 3가지</h3>
+            <p>측정 방법을 항목마다 적어 뒀습니다. 자세가 다르면 순위가 의미를 잃으니까요.</p>
+          </div>
+        </li>
+        <li>
+          <span class="fi">2</span>
+          <div>
+            <h3>또래 100명 중 몇 등</h3>
+            <p>국민체력100 실측 자료와 대조합니다. 집에서 못 잰 항목은 감추지 않고 그대로 남깁니다.</p>
+          </div>
+        </li>
+        <li>
+          <span class="fi">3</span>
+          <div>
+            <h3>퇴근 동선 안에서만</h3>
+            <p>직장과 집을 잇는 선에서 정한 거리 안, 퇴근 시각 뒤에 시작하는 것만 고릅니다.</p>
+          </div>
+        </li>
+        <li>
+          <span class="fi">4</span>
+          <div>
+            <h3>주소까지 그대로</h3>
+            <p>시설명·도로명주소·좌표가 공공데이터에서 옵니다. 예약은 해당 시설 페이지로 넘깁니다.</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="stage">
+      <div class="pin pin-1">집에서 3가지<span>장비 없이 5분</span></div>
+      <div class="pin pin-2">또래 순위<span>국민체력100 기준표</span></div>
+      <div class="pin pin-3">퇴근길 추천<span>동선 3km 이내</span></div>
+
+      <div class="phone phone-a">
+        <img src="shots/measure.png" alt="집에서 재는 항목 입력 화면" loading="lazy" width="540" height="1121">
+      </div>
+      <div class="phone phone-b">
+        <img src="shots/report.png" alt="진단 리포트 화면" loading="lazy" width="540" height="1121">
+      </div>
+      <div class="phone phone-c">
+        <img src="shots/recommend.png" alt="퇴근길 맞춤 강좌 추천 화면" loading="lazy" width="540" height="1121">
+      </div>
+    </div>
+  </div>
+</section>
 
 
 <section id="download" class="wrap">
@@ -395,6 +580,26 @@ footer a { color: var(--muted); }
   <p class="lede">
     체력을 재고, 약한 곳을 찾고, 퇴근 동선 안에서 갈 만한 곳을 받습니다.
   </p>
+
+  <!-- 처음 여는 순간부터 진단까지, 실제 화면 두 장으로 흐름을 보여 준다 -->
+  <div class="flow">
+    <figure class="flow-shot">
+      <div class="phone phone-still">
+        <img src="shots/onboarding.png" alt="첫 실행 때 직장·집·퇴근 시각을 받는 화면"
+             loading="lazy" width="540" height="1121">
+      </div>
+      <figcaption>처음 한 번만 · 직장과 집</figcaption>
+    </figure>
+    <figure class="flow-shot">
+      <div class="phone phone-still">
+        <img src="shots/home.png" alt="집에서 재기와 센터 안내가 있는 홈 화면"
+             loading="lazy" width="540" height="1121">
+      </div>
+      <figcaption>두 갈래 · 집에서 또는 센터에서</figcaption>
+    </figure>
+  </div>
+
+  <div style="height:20px"></div>
 
   <div class="grid grid-3">
     <div class="card step">
