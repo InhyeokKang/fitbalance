@@ -4,9 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitbalance.app.data.ApiClient
+import com.fitbalance.app.data.Center
+import com.fitbalance.app.data.CenterResponse
 import com.fitbalance.app.data.Course
 import com.fitbalance.app.data.DiagnoseRequest
 import com.fitbalance.app.data.DiagnoseResponse
+import com.fitbalance.app.data.PLACE_PRESETS
 import com.fitbalance.app.data.Prefs
 import com.fitbalance.app.data.RecommendRequest
 import com.fitbalance.app.data.RecommendResponse
@@ -62,6 +65,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _courseDetail = MutableStateFlow<UiState<Course>>(UiState.Idle)
     val courseDetail: StateFlow<UiState<Course>> = _courseDetail.asStateFlow()
 
+    private val _centers = MutableStateFlow<UiState<CenterResponse>>(UiState.Idle)
+    val centers: StateFlow<UiState<CenterResponse>> = _centers.asStateFlow()
+
     /** 최근 진단 결과. 홈 화면 요약과 추천 요청에 쓴다. */
     val lastDiagnosis: DiagnoseResponse?
         get() = (_diagnosis.value as? UiState.Success)?.data
@@ -101,7 +107,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     RecommendRequest(
                         deviceId = deviceId,
                         diagnosisId = diag?.diagnosisId,
-                        weakFactors = if (diag == null) listOf("flex", "balance") else null,
+                        weakFactors = if (diag == null) listOf("flex", "power") else null,
                         workLat = s.workLat,
                         workLng = s.workLng,
                         homeLat = s.homeLat,
@@ -132,6 +138,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 )
             } else loaded
+        }
+    }
+
+    /** 설정한 직장 위치의 시도를 앞세워 센터를 불러온다. */
+    fun loadCenters() {
+        _centers.value = UiState.Loading
+        viewModelScope.launch {
+            val sido = PLACE_PRESETS.firstOrNull {
+                kotlin.math.abs(it.lat - _settings.value.workLat) < 0.0005 &&
+                    kotlin.math.abs(it.lng - _settings.value.workLng) < 0.0005
+            }?.sido
+            _centers.value = runCatchingApi { ApiClient.service.centers(sido) }
         }
     }
 

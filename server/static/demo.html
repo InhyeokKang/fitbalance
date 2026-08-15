@@ -384,7 +384,7 @@ const FIELDS = [
 const state = {
   screen:"home", gender:"M",
   form:Object.fromEntries(FIELDS.map(f => [f.k, ""])),
-  selfAge:"", selfAnswers:{},
+  selfAge:"", selfAnswers:{}, centers:null,
   diagnosis:null, recommend:null, course:null, mapSelected:null,
   loading:false, error:null,
   settings: JSON.parse(localStorage.getItem("settings") || "null") || {
@@ -728,6 +728,18 @@ async function submitDiagnose(){
   render();
 }
 
+async function loadCenters(){
+  state.screen = "centers"; window.scrollTo(0,0); render();
+  // 설정한 직장 지역의 시도를 앞세운다
+  const hit = PRESETS.find(([, la, ln]) =>
+    Math.abs(la - state.settings.workLat) < 0.0005 &&
+    Math.abs(ln - state.settings.workLng) < 0.0005);
+  const sido = hit ? (hit[3].startsWith("서울") ? "서울" : hit[3].startsWith("경기") ? "경기" : "") : "";
+  const r = await call("/api/v1/centers" + (sido ? `?sido=${encodeURIComponent(sido)}` : ""));
+  if (r) state.centers = r;
+  render();
+}
+
 async function submitSelfCheck(){
   const r = await post("/api/v1/selfcheck", {
     device_id:deviceId, gender:state.gender, age:Number(state.selfAge),
@@ -781,7 +793,9 @@ function screenHome(){
     <div class="btn-stack">
       <button class="btn primary" onclick="go('measure')">측정값 넣고 정밀 진단</button>
       <div class="msg" style="text-align:center;margin-top:6px">
-        무료 체력인증센터(전국 75개소)에서 받은 결과지의 숫자를 넣습니다.</div>
+        측정값이 없다면 무료 체력인증센터에서 잴 수 있습니다.</div>
+      <button class="link" style="display:block;margin:4px auto 0"
+        onclick="loadCenters()">가까운 체력인증센터 찾기</button>
       <button class="btn ghost" style="margin-top:16px" onclick="go('selfcheck')">
         측정값이 없어요 · 간편 자가진단 1분</button>
       <div class="msg" style="text-align:center;margin-top:6px">
@@ -864,6 +878,53 @@ function screenMeasure(){
     <div class="btn-stack">
       <button class="btn primary" onclick="submitDiagnose()" ${formValid() ? "" : "disabled"}>
         ${formValid() ? "진단하기" : `${FIELDS.length - done}개 항목이 남았습니다`}</button>
+      <button class="btn ghost" onclick="go('home')">뒤로</button>
+    </div>`;
+}
+
+function screenCenters(){
+  const r = state.centers;
+  if (!r) return loadingBox("체력인증센터를 불러오는 중...", "searching");
+
+  return `
+    <div class="eyebrow">무료 체력측정</div>
+    <h2 class="title" style="font-size:21px;margin:0 0 12px">체력인증센터 찾기</h2>
+
+    <div style="display:flex;align-items:center;gap:8px;background:var(--mint-soft);
+                border-radius:16px;padding:14px;margin-bottom:12px">
+      ${mascot("workout", 60)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13.5px;font-weight:700;color:var(--mint-deep)">
+          전국 ${r.total}개소 · 무료</div>
+        <div style="font-size:12.5px;color:var(--mint-deep);margin-top:3px;line-height:1.5">
+          ${esc(r.notice)}</div>
+      </div>
+    </div>
+
+    <button class="btn dark" onclick="window.open('${esc(r.reserve_url)}','_blank')">
+      예약 페이지 열기</button>
+    <div class="msg" style="margin-top:6px">국민체력100 공식 예약 페이지로 이동합니다.</div>
+
+    ${r.nearby_count ? `<div class="chips" style="margin:16px 0 12px">
+      <span class="chip">${esc(r.sido)} ${r.nearby_count}개소 먼저</span></div>` : `<div style="height:14px"></div>`}
+
+    ${r.items.map(c => `
+      <div class="course" style="cursor:pointer"
+           onclick="window.open('https://map.kakao.com/?q=${encodeURIComponent(c.map_query)}','_blank')">
+        <div style="padding-left:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <h3>${esc(c.center_name)}</h3>
+            <span style="font-size:11px;font-weight:650;
+                         color:${c.sido === r.sido ? "var(--mint-deep)" : "var(--muted-2)"}">
+              ${esc(c.sido)} ${esc(c.sigungu)}</span>
+          </div>
+          <div class="sub">${esc(c.address)}</div>
+          ${c.tel ? `<div class="when">${esc(c.tel)}</div>` : ""}
+          <div class="reason">지도에서 보기</div>
+        </div>
+      </div>`).join("")}
+
+    <div class="btn-stack">
       <button class="btn ghost" onclick="go('home')">뒤로</button>
     </div>`;
 }
@@ -1218,7 +1279,7 @@ function saveSettings(){
 
 const SCREENS = {
   home:screenHome, measure:screenMeasure, report:screenReport,
-  selfcheck:screenSelfCheck, recommend:screenRecommend, map:screenMap,
+  selfcheck:screenSelfCheck, centers:screenCenters, recommend:screenRecommend, map:screenMap,
   course:screenCourse, settings:screenSettings,
 };
 

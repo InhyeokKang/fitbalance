@@ -9,6 +9,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
 
 interface ApiService {
@@ -18,6 +19,10 @@ interface ApiService {
     /** 측정 장비가 없는 사용자를 위한 간편 자가진단. 응답 형태는 진단과 같다. */
     @POST("api/v1/selfcheck")
     suspend fun selfCheck(@Body body: SelfCheckRequest): DiagnoseResponse
+
+    /** 체력인증센터 목록. sido를 주면 그 지역을 앞으로 정렬해 준다. */
+    @GET("api/v1/centers")
+    suspend fun centers(@Query("sido") sido: String? = null): CenterResponse
 
     @POST("api/v1/recommend")
     suspend fun recommend(@Body body: RecommendRequest): RecommendResponse

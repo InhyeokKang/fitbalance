@@ -49,6 +49,7 @@ fun HomeScreen(
     lastDiagnosis: DiagnoseResponse?,
     onMeasure: () -> Unit,
     onSelfCheck: () -> Unit,
+    onFindCenter: () -> Unit,
     onRecommend: () -> Unit,
     onReport: () -> Unit,
     onSettings: () -> Unit,
@@ -62,7 +63,7 @@ fun HomeScreen(
     ) {
         BrandBar(onSettings)
 
-        if (lastDiagnosis == null) EmptyHome(onMeasure, onSelfCheck)
+        if (lastDiagnosis == null) EmptyHome(onMeasure, onSelfCheck, onFindCenter)
         else DiagnosedHome(lastDiagnosis, onRecommend, onReport, onMeasure)
 
         VSpace(40)
@@ -108,7 +109,11 @@ fun BrandBar(onSettings: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun EmptyHome(onMeasure: () -> Unit, onSelfCheck: () -> Unit) {
+private fun EmptyHome(
+    onMeasure: () -> Unit,
+    onSelfCheck: () -> Unit,
+    onFindCenter: () -> Unit,
+) {
     Text(
         "앉아서 일하는 몸,\n어디가 무너졌는지\n부터 봅니다",
         style = MaterialTheme.typography.headlineMedium,
@@ -163,10 +168,22 @@ private fun EmptyHome(onMeasure: () -> Unit, onSelfCheck: () -> Unit) {
     PrimaryButton("측정값 넣고 정밀 진단", onMeasure)
     VSpace(6)
     Text(
-        "무료 체력인증센터(전국 75개소)에서 받은 결과지의 숫자를 넣습니다.",
+        "측정값이 없다면 무료 체력인증센터에서 잴 수 있습니다.",
         style = MaterialTheme.typography.bodySmall,
         color = Brand.Muted2,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        textAlign = TextAlign.Center,
+    )
+    VSpace(6)
+    Text(
+        "가까운 체력인증센터 찾기",
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = FontWeight.Bold,
+        color = Brand.MintDeep,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onFindCenter)
+            .padding(vertical = 4.dp),
         textAlign = TextAlign.Center,
     )
 

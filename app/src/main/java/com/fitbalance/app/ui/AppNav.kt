@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.fitbalance.app.ui.screens.CenterScreen
 import com.fitbalance.app.ui.screens.CourseDetailScreen
 import com.fitbalance.app.ui.screens.HomeScreen
 import com.fitbalance.app.ui.screens.MapScreen
@@ -23,6 +24,7 @@ object Routes {
     const val HOME = "home"
     const val MEASURE = "measure"
     const val SELFCHECK = "selfcheck"
+    const val CENTERS = "centers"
     const val REPORT = "report"
     const val RECOMMEND = "recommend"
     const val MAP = "map"
@@ -38,6 +40,7 @@ fun AppNav(vm: AppViewModel = viewModel()) {
     val diagnosis by vm.diagnosis.collectAsStateWithLifecycle()
     val recommendation by vm.recommendation.collectAsStateWithLifecycle()
     val courseDetail by vm.courseDetail.collectAsStateWithLifecycle()
+    val centers by vm.centers.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     NavHost(navController = nav, startDestination = Routes.HOME) {
@@ -47,6 +50,10 @@ fun AppNav(vm: AppViewModel = viewModel()) {
                 lastDiagnosis = (diagnosis as? UiState.Success)?.data,
                 onMeasure = { nav.navigate(Routes.MEASURE) },
                 onSelfCheck = { nav.navigate(Routes.SELFCHECK) },
+                onFindCenter = {
+                    vm.loadCenters()
+                    nav.navigate(Routes.CENTERS)
+                },
                 onRecommend = {
                     vm.recommend()
                     nav.navigate(Routes.RECOMMEND)
@@ -60,10 +67,22 @@ fun AppNav(vm: AppViewModel = viewModel()) {
             MeasureScreen(
                 deviceId = vm.deviceId,
                 onBack = { nav.popBackStack() },
+                onFindCenter = {
+                    vm.loadCenters()
+                    nav.navigate(Routes.CENTERS)
+                },
                 onSubmit = { req ->
                     vm.diagnose(req)
                     nav.navigate(Routes.REPORT)
                 },
+            )
+        }
+
+        composable(Routes.CENTERS) {
+            CenterScreen(
+                state = centers,
+                onBack = { nav.popBackStack() },
+                onRetry = { vm.loadCenters() },
             )
         }
 

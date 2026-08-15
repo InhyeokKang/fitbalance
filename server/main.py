@@ -129,6 +129,11 @@ def load_csv_to_sqlite() -> tuple[int, int]:
             tag_strength INTEGER, tag_endurance INTEGER, tag_flex INTEGER,
             tag_cardio INTEGER, tag_power INTEGER
         );
+        DROP TABLE IF EXISTS centers;
+        CREATE TABLE centers (
+            center_code TEXT PRIMARY KEY, sido TEXT, sigungu TEXT,
+            center_name TEXT, address TEXT, tel TEXT
+        );
         DROP TABLE IF EXISTS facility_addresses;
         CREATE TABLE facility_addresses (
             facility TEXT PRIMARY KEY, address TEXT
@@ -199,6 +204,23 @@ def load_csv_to_sqlite() -> tuple[int, int]:
         missing = {c[2] for c in course_rows} - {a[0] for a in address_rows}
         if missing:
             print(f"[주소 없음] {len(missing)}개 시설: {', '.join(sorted(missing))}")
+
+    # 체력인증센터 목록. 없어도 서버는 뜬다(그 화면만 비어 보인다).
+    centers_path = DATA_DIR / "centers.csv"
+    if centers_path.exists():
+        with open(centers_path, encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            expected = ["center_code", "sido", "sigungu", "center_name", "address", "tel"]
+            if reader.fieldnames != expected:
+                raise RuntimeError(
+                    f"centers.csv 열 구성이 다릅니다: {reader.fieldnames} (기대: {expected})"
+                )
+            center_rows = [
+                (r["center_code"], r["sido"], r["sigungu"],
+                 r["center_name"], r["address"], r["tel"])
+                for r in reader
+            ]
+        cur.executemany("INSERT OR REPLACE INTO centers VALUES (?,?,?,?,?,?)", center_rows)
 
     conn.commit()
     conn.close()
@@ -545,6 +567,49 @@ def selfcheck(req: SelfCheckRequest):
     finally:
         conn.close()
     return result
+
+
+@app.get("/api/v1/centers")
+def centers(
+    sido: str | None = Query(default=None, description="시도명. 주면 그 지역을 먼저 보여준다"),
+    limit: int = Query(default=100, ge=1, le=200),
+):
+    """
+    국민체력100 체력인증센터 목록. 전국 무료이며, 앱은 여기서 측정을 안내한다.
+
+    좌표가 없어 거리순 정렬은 못 한다. [sido]가 오면 그 지역을 앞에 두고,
+    나머지를 뒤에 붙여 돌려준다.
+    """
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM centers ORDER BY sido, sigungu, center_name"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    def to_dict(r: sqlite3.Row) -> dict:
+        return {
+            "center_code": r["center_code"], "sido": r["sido"], "sigungu": r["sigungu"],
+            "center_name": r["center_name"], "address": r["address"], "tel": r["tel"],
+            # 앱에서 지도 앱으로 넘길 검색어
+            "map_query": f"{r['center_name']} 체력인증센터 {r['address']}",
+        }
+
+    items = [to_dict(r) for r in rows]
+    nearby: list[dict] = []
+    if sido:
+        nearby = [c for c in items if c["sido"] == sido]
+        items = nearby + [c for c in items if c["sido"] != sido]
+
+    return {
+        "total": len(items),
+        "nearby_count": len(nearby),
+        "sido": sido,
+        "reserve_url": "https://nfa.kspo.or.kr/reserve/0/selectMeasureReserveList.kspo",
+        "notice": "국민체력100 체력인증센터는 만 13세 이상 누구나 무료로 이용할 수 있습니다.",
+        "items": items[:limit],
+    }
 
 
 def _course_dict(r: sqlite3.Row) -> dict:

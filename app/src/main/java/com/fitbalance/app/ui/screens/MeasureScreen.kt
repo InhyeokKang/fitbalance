@@ -75,6 +75,7 @@ private fun Double.fmt(): String =
 fun MeasureScreen(
     deviceId: String,
     onBack: () -> Unit,
+    onFindCenter: () -> Unit,
     onSubmit: (DiagnoseRequest) -> Unit,
 ) {
     var gender by remember { mutableStateOf("M") }
@@ -213,6 +214,8 @@ fun MeasureScreen(
             },
             enabled = allValid,
         )
+        VSpace(9)
+        GhostButton("측정값이 없어요 · 체력인증센터 찾기", onFindCenter)
         VSpace(9)
         GhostButton("뒤로", onBack)
         VSpace(40)

@@ -204,3 +204,23 @@ def test_address_is_joined_everywhere():
         }).json()
         assert rec["total"] >= 1
         assert all(i["address"] for i in rec["items"]), "추천에 주소 없는 강좌가 있습니다"
+
+
+def test_centers_lists_real_kspo_centers():
+    """체력인증센터 목록. 측정 장비가 없는 사용자를 무료 측정으로 안내하는 화면이 쓴다."""
+    with TestClient(app) as c:
+        b = c.get("/api/v1/centers").json()
+        assert b["total"] >= 70, f"센터가 {b['total']}개뿐입니다"
+        assert b["reserve_url"].startswith("https://")
+        first = b["items"][0]
+        for key in ("center_code", "sido", "sigungu", "center_name", "address", "map_query"):
+            assert first[key], f"{key}가 비어 있습니다"
+
+
+def test_centers_puts_requested_sido_first():
+    with TestClient(app) as c:
+        b = c.get("/api/v1/centers", params={"sido": "서울"}).json()
+        assert b["nearby_count"] >= 1
+        # 요청한 지역이 앞쪽에 모여 있어야 한다
+        head = b["items"][: b["nearby_count"]]
+        assert all(i["sido"] == "서울" for i in head)

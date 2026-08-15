@@ -125,3 +125,24 @@ data class RecommendResponse(
     val items: List<Course>,
     val hint: String? = null,
 )
+
+/** 국민체력100 체력인증센터. 전국 무료이며, 앱은 여기서 정밀 측정을 안내한다. */
+data class Center(
+    @SerializedName("center_code") val centerCode: String,
+    val sido: String,
+    val sigungu: String,
+    @SerializedName("center_name") val centerName: String,
+    val address: String,
+    val tel: String,
+    /** 지도 앱으로 넘길 검색어. */
+    @SerializedName("map_query") val mapQuery: String,
+)
+
+data class CenterResponse(
+    val total: Int,
+    @SerializedName("nearby_count") val nearbyCount: Int,
+    val sido: String?,
+    @SerializedName("reserve_url") val reserveUrl: String,
+    val notice: String,
+    val items: List<Center>,
+)
