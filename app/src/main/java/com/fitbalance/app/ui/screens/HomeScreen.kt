@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fitbalance.app.data.DiagnoseResponse
@@ -47,6 +48,7 @@ import com.fitbalance.app.ui.theme.Brand
 fun HomeScreen(
     lastDiagnosis: DiagnoseResponse?,
     onMeasure: () -> Unit,
+    onSelfCheck: () -> Unit,
     onRecommend: () -> Unit,
     onReport: () -> Unit,
     onSettings: () -> Unit,
@@ -60,7 +62,7 @@ fun HomeScreen(
     ) {
         BrandBar(onSettings)
 
-        if (lastDiagnosis == null) EmptyHome(onMeasure)
+        if (lastDiagnosis == null) EmptyHome(onMeasure, onSelfCheck)
         else DiagnosedHome(lastDiagnosis, onRecommend, onReport, onMeasure)
 
         VSpace(40)
@@ -106,7 +108,7 @@ fun BrandBar(onSettings: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun EmptyHome(onMeasure: () -> Unit) {
+private fun EmptyHome(onMeasure: () -> Unit, onSelfCheck: () -> Unit) {
     Text(
         "앉아서 일하는 몸,\n어디가 무너졌는지\n부터 봅니다",
         style = MaterialTheme.typography.headlineMedium,
@@ -135,7 +137,7 @@ private fun EmptyHome(onMeasure: () -> Unit) {
                 )
                 VSpace(8)
                 Text(
-                    "측정값 8가지만 넣으면\n어디가 무너졌는지 바로 나옵니다.",
+                    "국민체력100 기준으로\n어디가 무너졌는지 짚어 드립니다.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.72f),
                 )
@@ -147,7 +149,7 @@ private fun EmptyHome(onMeasure: () -> Unit) {
                         .padding(horizontal = 11.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        "기준표 200행 · 강좌 30개",
+                        "근력 · 근지구력 · 유연성 · 심폐 · 순발력",
                         fontSize = 11.sp,
                         color = Color.White.copy(alpha = 0.6f),
                     )
@@ -158,9 +160,26 @@ private fun EmptyHome(onMeasure: () -> Unit) {
     }
 
     VSpace(22)
-    PrimaryButton("체력 측정 시작하기", onMeasure)
-    VSpace(9)
-    GhostButton("추천 강좌 보기 · 진단 후 열립니다", {}, enabled = false)
+    PrimaryButton("측정값 넣고 정밀 진단", onMeasure)
+    VSpace(6)
+    Text(
+        "무료 체력인증센터(전국 75개소)에서 받은 결과지의 숫자를 넣습니다.",
+        style = MaterialTheme.typography.bodySmall,
+        color = Brand.Muted2,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        textAlign = TextAlign.Center,
+    )
+
+    VSpace(16)
+    GhostButton("측정값이 없어요 · 간편 자가진단 1분", onSelfCheck)
+    VSpace(6)
+    Text(
+        "도구 없이 6문항으로 약점을 추정합니다.",
+        style = MaterialTheme.typography.bodySmall,
+        color = Brand.Muted2,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable

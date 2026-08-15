@@ -104,9 +104,10 @@ fun CourseDetailScreen(
                     SectionHeader("이 강좌가 키우는 체력요인")
                     Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         if (c.tags.strength == 1) Chip("근력")
+                        if (c.tags.endurance == 1) Chip("근지구력")
                         if (c.tags.flex == 1) Chip("유연성")
                         if (c.tags.cardio == 1) Chip("심폐지구력")
-                        if (c.tags.balance == 1) Chip("평형성")
+                        if (c.tags.power == 1) Chip("순발력")
                     }
 
                     VSpace(18)

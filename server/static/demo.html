@@ -327,7 +327,8 @@ const API = "";
 let deviceId = localStorage.getItem("device_id");
 if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem("device_id", deviceId); }
 
-const FACTOR_LABEL = {strength:"근력", flex:"유연성", cardio:"심폐지구력", balance:"평형성"};
+const FACTOR_LABEL = {strength:"근력", endurance:"근지구력", flex:"유연성",
+                      cardio:"심폐지구력", power:"순발력"};
 
 // [이름, 위도, 경도, 주소]. 좌표는 계산용이고 화면에는 주소만 내보낸다.
 const PRESETS = [
@@ -347,6 +348,28 @@ function addressOf(lat, lng){
   return hit ? hit[3] : "선택한 지역 정보를 찾을 수 없습니다";
 }
 
+// 도구 없이 답할 수 있는 문항만 넣는다. 선택지 index가 그대로 0~3점이 된다.
+const SELF_QUESTIONS = [
+  {k:"strength",  factor:"근력",       q:"무릎 대고 팔굽혀펴기를 연속 몇 개나 할 수 있나요?",
+   hint:"무릎을 바닥에 대고 해도 됩니다",
+   options:["4개 이하","5~9개","10~19개","20개 이상"]},
+  {k:"endurance", factor:"근지구력",   q:"의자에 앉았다 일어서기를 30초간 몇 번 하나요?",
+   hint:"팔짱을 끼고, 등받이에 기대지 않고 세어 보세요",
+   options:["9번 이하","10~14번","15~19번","20번 이상"]},
+  {k:"flex",      factor:"유연성",     q:"선 자세에서 무릎을 펴고 앞으로 굽히면 손끝이 어디까지 닿나요?",
+   hint:"반동 주지 말고 천천히 내려가 보세요",
+   options:["무릎 위","무릎~정강이","발목 근처","손끝이 바닥에 닿음"]},
+  {k:"cardio",    factor:"심폐지구력", q:"계단으로 3층까지 쉬지 않고 오르면 어떤가요?",
+   hint:"평소 속도로 올랐을 때를 기준으로",
+   options:["중간에 쉬어야 함","꽤 숨참","약간 숨참","거의 숨차지 않음"]},
+  {k:"power",     factor:"순발력",     q:"계단을 두 칸씩 뛰어오를 수 있나요?",
+   hint:"버스를 놓칠 것 같을 때를 떠올려 보세요",
+   options:["못 함","힘듦","가능함","쉽게 함"]},
+  {k:"activity",  factor:"활동량",     q:"일주일에 30분 이상 숨찬 운동을 며칠 하나요?",
+   hint:"빠르게 걷기도 포함됩니다",
+   options:["거의 안 함","1~2일","3~4일","5일 이상"]},
+];
+
 const FIELDS = [
   {k:"age",      label:"나이",                 unit:"세", min:19,  max:64,  hint:"만 19~64세",      sample:"34"},
   {k:"height",   label:"키",                   unit:"cm", min:100, max:250, hint:"",                sample:"175"},
@@ -355,12 +378,13 @@ const FIELDS = [
   {k:"situp",    label:"교차윗몸일으키기",     unit:"회", min:0,   max:100, hint:"60초간 횟수",     sample:"38"},
   {k:"sitreach", label:"앉아윗몸앞으로굽히기", unit:"cm", min:-30, max:40,  hint:"음수 입력 가능",  sample:"6.5"},
   {k:"shuttle",  label:"왕복오래달리기",       unit:"회", min:0,   max:120, hint:"20m 셔틀런 횟수", sample:"52"},
-  {k:"balance",  label:"눈감고외발서기",       unit:"초", min:0,   max:120, hint:"최대 120초",      sample:"21"},
+  {k:"jump",     label:"제자리멀리뛰기",       unit:"cm", min:30,  max:350, hint:"두 발 모아 뛴 거리", sample:"205"},
 ];
 
 const state = {
   screen:"home", gender:"M",
   form:Object.fromEntries(FIELDS.map(f => [f.k, ""])),
+  selfAge:"", selfAnswers:{},
   diagnosis:null, recommend:null, course:null, mapSelected:null,
   loading:false, error:null,
   settings: JSON.parse(localStorage.getItem("settings") || "null") || {
@@ -698,7 +722,18 @@ async function submitDiagnose(){
     device_id:deviceId, gender:state.gender, age:n("age"),
     height_cm:n("height"), weight_kg:n("weight"), grip_kg:n("grip"),
     sit_up:n("situp"), sit_reach_cm:n("sitreach"),
-    shuttle_run:n("shuttle"), one_leg_stand_sec:n("balance"),
+    shuttle_run:n("shuttle"), standing_jump_cm:n("jump"),
+  });
+  if (r) { state.diagnosis = r; state.screen = "report"; window.scrollTo(0,0); }
+  render();
+}
+
+async function submitSelfCheck(){
+  const r = await post("/api/v1/selfcheck", {
+    device_id:deviceId, gender:state.gender, age:Number(state.selfAge),
+    strength:state.selfAnswers.strength, endurance:state.selfAnswers.endurance,
+    flex:state.selfAnswers.flex, cardio:state.selfAnswers.cardio,
+    power:state.selfAnswers.power, activity:state.selfAnswers.activity,
   });
   if (r) { state.diagnosis = r; state.screen = "report"; window.scrollTo(0,0); }
   render();
@@ -710,7 +745,7 @@ async function loadRecommend(){
   const r = await post("/api/v1/recommend", {
     device_id:deviceId,
     diagnosis_id: state.diagnosis ? state.diagnosis.diagnosis_id : null,
-    weak_factors: state.diagnosis ? null : ["flex","balance"],
+    weak_factors: state.diagnosis ? null : ["flex","power"],
     work_lat:s.workLat, work_lng:s.workLng, home_lat:s.homeLat, home_lng:s.homeLng,
     leave_time:s.leaveTime, max_distance_km:s.maxDistanceKm, limit:10,
   });
@@ -744,9 +779,13 @@ function screenHome(){
       </div>
     </div>
     <div class="btn-stack">
-      <button class="btn primary" onclick="go('measure')">체력 측정 시작하기</button>
-      <button class="btn ghost" disabled style="opacity:.45;cursor:not-allowed">
-        추천 강좌 보기 · 진단 후 열립니다</button>
+      <button class="btn primary" onclick="go('measure')">측정값 넣고 정밀 진단</button>
+      <div class="msg" style="text-align:center;margin-top:6px">
+        무료 체력인증센터(전국 75개소)에서 받은 결과지의 숫자를 넣습니다.</div>
+      <button class="btn ghost" style="margin-top:16px" onclick="go('selfcheck')">
+        측정값이 없어요 · 간편 자가진단 1분</button>
+      <div class="msg" style="text-align:center;margin-top:6px">
+        도구 없이 6문항으로 약점을 추정합니다.</div>
     </div>`;
 
   const weakNames = d.factors.filter(f => d.weak_factors.includes(f.factor))
@@ -758,7 +797,7 @@ function screenHome(){
         <div style="flex:1;min-width:0">
           <div class="label">내 체력 종합</div>
           <div class="ring-num">${d.total_score}<span style="font-size:15px;font-weight:600">점</span></div>
-          <div class="ring-sub">${d.gender === "M" ? "남성" : "여성"} · ${esc(d.age_band.replace("s","대"))} 기준</div>
+          <div class="ring-sub">${d.gender === "M" ? "남성" : "여성"} · ${esc(d.age_band_label || d.age_band)} 기준</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:16px">
@@ -829,6 +868,90 @@ function screenMeasure(){
     </div>`;
 }
 
+function screenSelfCheck(){
+  if (state.loading) return loadingBox("약점을 추정하는 중...", "searching");
+
+  const answered = SELF_QUESTIONS.filter(q => state.selfAnswers[q.k] !== undefined).length;
+  const age = Number(state.selfAge);
+  const ageValid = state.selfAge !== "" && Number.isFinite(age) && age >= 19 && age <= 64;
+  const ready = ageValid && answered === SELF_QUESTIONS.length;
+
+  return `
+    <div class="eyebrow">간편 자가진단</div>
+    <h2 class="title" style="font-size:21px;margin:0 0 10px">도구 없이 1분</h2>
+
+    <div style="display:flex;align-items:center;gap:8px;background:var(--mint-soft);
+                border-radius:14px;padding:14px;margin-bottom:4px">
+      ${mascot("searching", 52)}
+      <div style="font-size:12.5px;font-weight:600;color:var(--mint-deep);line-height:1.5">
+        설문으로 약점을 추정합니다. 정확한 진단은 무료 체력인증센터에서 측정한 값을 넣어 주세요.
+      </div>
+    </div>
+
+    <div class="progress">
+      <span>${answered}/${SELF_QUESTIONS.length}</span>
+      <div class="track"><div class="fill"
+        style="width:${answered / SELF_QUESTIONS.length * 100}%"></div></div>
+    </div>
+
+    <div class="card" style="padding:16px 18px 20px">
+      <div class="field" style="margin-top:0">
+        <label>성별</label>
+        <div class="seg">
+          <button class="${state.gender === "M" ? "on" : ""}" onclick="setGender('M')">남성</button>
+          <button class="${state.gender === "F" ? "on" : ""}" onclick="setGender('F')">여성</button>
+        </div>
+      </div>
+      <div class="field">
+        <label><span>나이</span><span class="unit">세</span></label>
+        <input value="${esc(state.selfAge)}" inputmode="numeric" data-fk="selfAge"
+               oninput="setSelfAge(this.value)" placeholder="19 ~ 64">
+        <div class="msg ${state.selfAge && !ageValid ? "err" : ""}">
+          ${state.selfAge && !ageValid ? "19~64세 범위로 입력해 주세요" : "만 19~64세"}</div>
+      </div>
+    </div>
+
+    ${SELF_QUESTIONS.map((q, i) => {
+      const picked = state.selfAnswers[q.k];
+      return `<div class="card" style="padding:16px 18px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+                       font-size:11px;font-weight:800;
+                       background:${picked !== undefined ? "var(--mint-deep)" : "#EDF1F0"};
+                       color:${picked !== undefined ? "#fff" : "var(--muted-2)"}">${i + 1}</span>
+          <span style="font-size:12.5px;font-weight:700;color:var(--mint-deep)">${esc(q.factor)}</span>
+        </div>
+        <div style="font-size:15px;font-weight:600;letter-spacing:-.02em">${esc(q.q)}</div>
+        <div class="msg" style="margin-top:4px">${esc(q.hint)}</div>
+        <div style="margin-top:12px">
+          ${q.options.map((opt, score) => {
+            const on = picked === score;
+            return `<div onclick="setSelfAnswer('${q.k}',${score})"
+              style="display:flex;align-items:center;gap:10px;cursor:pointer;
+                     border-radius:12px;padding:12px 14px;margin-bottom:7px;
+                     background:${on ? "var(--mint-soft)" : "var(--bg)"};
+                     font-size:13.5px;font-weight:${on ? 700 : 400};
+                     color:${on ? "var(--mint-deep)" : "var(--text)"}">
+              <span style="width:16px;height:16px;border-radius:50%;flex:none;
+                           display:grid;place-items:center;
+                           background:${on ? "var(--mint-deep)" : "var(--line)"}">
+                ${on ? `<span style="width:6px;height:6px;border-radius:50%;background:#fff"></span>` : ""}
+              </span>${esc(opt)}</div>`;
+          }).join("")}
+        </div>
+      </div>`;
+    }).join("")}
+
+    <div class="btn-stack">
+      <button class="btn primary" onclick="submitSelfCheck()" ${ready ? "" : "disabled"}>
+        ${!ageValid ? "나이를 입력해 주세요"
+          : answered < SELF_QUESTIONS.length
+            ? `${SELF_QUESTIONS.length - answered}개 문항이 남았습니다`
+            : "결과 보기"}</button>
+      <button class="btn ghost" onclick="go('home')">뒤로</button>
+    </div>`;
+}
+
 function screenReport(){
   const d = state.diagnosis;
   if (!d) return `<div class="empty"><strong>진단 결과가 없습니다</strong>
@@ -843,7 +966,7 @@ function screenReport(){
         <div style="flex:1;min-width:0">
           <div class="label">종합 점수</div>
           <div class="ring-num">${d.total_score}<span style="font-size:15px;font-weight:600">점</span></div>
-          <div class="ring-sub">4개 요인 백분위 평균</div>
+          <div class="ring-sub">5개 요인 백분위 평균</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:16px">
@@ -853,8 +976,12 @@ function screenReport(){
         </div>
         ${mascot(moodOfScore(d.total_score), 84)}
       </div>
-      <div class="meta">${d.gender === "M" ? "남성" : "여성"} · ${esc(d.age_band.replace("s","대"))} 기준표와 대조</div>
+      <div class="meta">${d.gender === "M" ? "남성" : "여성"} · ${esc(d.age_band_label || d.age_band)} 기준표와 대조</div>
     </div>
+
+    ${d.estimated ? `<div style="background:var(--mint-soft);border-radius:14px;padding:14px;
+      margin-bottom:12px;font-size:12.5px;font-weight:600;color:var(--mint-deep);line-height:1.5">
+      ${esc(d.notice || "설문으로 추정한 참고용 결과입니다.")}</div>` : ""}
 
     <div class="card radar-card">${radarChart(d.factors, d.weak_factors)}</div>
 
@@ -862,12 +989,13 @@ function screenReport(){
     <div class="card">
       ${d.factors.map(f => factorBar(f, d.weak_factors.includes(f.factor))).join("")}
       <div class="msg" style="margin-top:14px;line-height:1.6">
-        같은 성별·나이대 100명과 비교한 순위입니다. 숫자가 작을수록 좋습니다.<br>
+        ${d.estimated ? "설문 답변으로 추정한 순위입니다. 숫자가 작을수록 좋습니다." : "같은 성별·나이대 100명과 비교한 순위입니다. 숫자가 작을수록 좋습니다."}<br>
         <strong style="color:var(--coral)">${esc(weakNames)}</strong>이(가) 가장 뒤처진 두 요인이며,
         추천 강좌는 이 둘을 기준으로 고릅니다.
       </div>
     </div>
 
+    ${d.items.length ? `
     <div class="section-h">측정 항목 상세</div>
     <div class="card">
       ${d.items.map(i => `
@@ -878,8 +1006,9 @@ function screenReport(){
                <div class="item-grade" style="color:${tone(i.percentile)};text-align:right">
                  ${esc(i.grade)}</div></div>
         </div>`).join("")}
-    </div>
+    </div>` : ""}
 
+    ${d.bmi ? `
     <div class="section-h">체질량지수</div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center">
@@ -893,7 +1022,7 @@ function screenReport(){
             ${esc(d.bmi.category)}</div>
         </div>
       </div>
-    </div>
+    </div>` : ""}
 
     <div class="btn-stack">
       <button class="btn primary" onclick="loadRecommend()">이 약점에 맞는 강좌 보기</button>
@@ -1080,6 +1209,8 @@ function pickPlace(which, lat, lng){
   state.settings[which + "Lat"] = lat; state.settings[which + "Lng"] = lng; render();
 }
 function setSetting(k, v){ state.settings[k] = v; render(); }
+function setSelfAge(v){ state.selfAge = v; render(); }
+function setSelfAnswer(k, score){ state.selfAnswers[k] = score; render(); }
 function saveSettings(){
   localStorage.setItem("settings", JSON.stringify(state.settings));
   if (state.diagnosis) loadRecommend(); else go("home");
@@ -1087,7 +1218,8 @@ function saveSettings(){
 
 const SCREENS = {
   home:screenHome, measure:screenMeasure, report:screenReport,
-  recommend:screenRecommend, map:screenMap, course:screenCourse, settings:screenSettings,
+  selfcheck:screenSelfCheck, recommend:screenRecommend, map:screenMap,
+  course:screenCourse, settings:screenSettings,
 };
 
 /** 지도 마커 선택. 하단 카드가 함께 바뀐다. */

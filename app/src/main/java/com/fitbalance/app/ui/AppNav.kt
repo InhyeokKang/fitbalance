@@ -16,11 +16,13 @@ import com.fitbalance.app.ui.screens.MapScreen
 import com.fitbalance.app.ui.screens.MeasureScreen
 import com.fitbalance.app.ui.screens.RecommendScreen
 import com.fitbalance.app.ui.screens.ReportScreen
+import com.fitbalance.app.ui.screens.SelfCheckScreen
 import com.fitbalance.app.ui.screens.SettingsScreen
 
 object Routes {
     const val HOME = "home"
     const val MEASURE = "measure"
+    const val SELFCHECK = "selfcheck"
     const val REPORT = "report"
     const val RECOMMEND = "recommend"
     const val MAP = "map"
@@ -44,6 +46,7 @@ fun AppNav(vm: AppViewModel = viewModel()) {
             HomeScreen(
                 lastDiagnosis = (diagnosis as? UiState.Success)?.data,
                 onMeasure = { nav.navigate(Routes.MEASURE) },
+                onSelfCheck = { nav.navigate(Routes.SELFCHECK) },
                 onRecommend = {
                     vm.recommend()
                     nav.navigate(Routes.RECOMMEND)
@@ -59,6 +62,17 @@ fun AppNav(vm: AppViewModel = viewModel()) {
                 onBack = { nav.popBackStack() },
                 onSubmit = { req ->
                     vm.diagnose(req)
+                    nav.navigate(Routes.REPORT)
+                },
+            )
+        }
+
+        composable(Routes.SELFCHECK) {
+            SelfCheckScreen(
+                deviceId = vm.deviceId,
+                onBack = { nav.popBackStack() },
+                onSubmit = { req ->
+                    vm.selfCheck(req)
                     nav.navigate(Routes.REPORT)
                 },
             )

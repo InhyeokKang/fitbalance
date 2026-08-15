@@ -65,7 +65,7 @@ private val FIELDS = listOf(
     MeasureField("situp", "교차윗몸일으키기", "회", 0.0, 100.0, "60초간 횟수", "38"),
     MeasureField("sitreach", "앉아윗몸앞으로굽히기", "cm", -30.0, 40.0, "음수 입력 가능", "6.5"),
     MeasureField("shuttle", "왕복오래달리기", "회", 0.0, 120.0, "20m 셔틀런 횟수", "52"),
-    MeasureField("balance", "눈감고외발서기", "초", 0.0, 120.0, "최대 120초", "21"),
+    MeasureField("jump", "제자리멀리뛰기", "cm", 30.0, 350.0, "두 발 모아 뛴 거리", "205"),
 )
 
 private fun Double.fmt(): String =
@@ -207,7 +207,7 @@ fun MeasureScreen(
                         sitUp = num("situp").toInt(),
                         sitReachCm = num("sitreach"),
                         shuttleRun = num("shuttle").toInt(),
-                        oneLegStandSec = num("balance"),
+                        standingJumpCm = num("jump"),
                     )
                 )
             },

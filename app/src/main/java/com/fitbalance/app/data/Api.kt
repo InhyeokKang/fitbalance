@@ -15,6 +15,10 @@ interface ApiService {
     @POST("api/v1/diagnose")
     suspend fun diagnose(@Body body: DiagnoseRequest): DiagnoseResponse
 
+    /** 측정 장비가 없는 사용자를 위한 간편 자가진단. 응답 형태는 진단과 같다. */
+    @POST("api/v1/selfcheck")
+    suspend fun selfCheck(@Body body: SelfCheckRequest): DiagnoseResponse
+
     @POST("api/v1/recommend")
     suspend fun recommend(@Body body: RecommendRequest): RecommendResponse
 

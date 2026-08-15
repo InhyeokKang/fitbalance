@@ -13,7 +13,7 @@ SAMPLE = {
     "sit_up": 38,
     "sit_reach_cm": 6.5,
     "shuttle_run": 52,
-    "one_leg_stand_sec": 21.0,
+    "standing_jump_cm": 205.0,
 }
 
 
@@ -23,7 +23,7 @@ def test_health():
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "ok"
-        assert body["norms_rows"] == 200
+        assert body["norms_rows"] == 450
         assert body["courses_rows"] == 30
 
 
@@ -41,9 +41,11 @@ def test_diagnose_returns_percentiles_and_weak_factors():
         r = c.post("/api/v1/diagnose", json=SAMPLE)
         assert r.status_code == 200, r.text
         b = r.json()
-        assert b["age_band"] == "30s"
+        assert b["age_band"] == "30-34"
+        assert b["age_band_label"] == "30~34세"
+        assert b["estimated"] is False
         assert len(b["items"]) == 5
-        assert len(b["factors"]) == 4
+        assert len(b["factors"]) == 5
         assert len(b["weak_factors"]) == 2
         assert 0 <= b["total_score"] <= 100
         for f in b["factors"]:
@@ -55,6 +57,70 @@ def test_diagnose_rejects_out_of_range():
     with TestClient(app) as c:
         bad = dict(SAMPLE, sit_reach_cm=999)
         assert c.post("/api/v1/diagnose", json=bad).status_code == 422
+
+
+def test_factors_follow_kspo_classification():
+    """공단 분류를 따르는지 확인. 교차윗몸일으키기는 근력이 아니라 근지구력이다."""
+    with TestClient(app) as c:
+        b = c.post("/api/v1/diagnose", json=SAMPLE).json()
+        codes = [f["factor"] for f in b["factors"]]
+        assert codes == ["strength", "endurance", "flex", "cardio", "power"]
+        labels = [f["label"] for f in b["factors"]]
+        assert labels == ["근력", "근지구력", "유연성", "심폐지구력", "순발력"]
+        # 평형성은 어르신기 항목이므로 성인기 진단에 나오면 안 된다.
+        assert "평형성" not in labels
+        items = [i["item"] for i in b["items"]]
+        assert "one_leg_stand" not in items
+        assert "standing_jump" in items
+
+
+def test_age_band_is_five_year_range():
+    """공단 인증기준이 5세 단위이므로 10세로 묶으면 안 된다."""
+    with TestClient(app) as c:
+        for age, expected in [(19, "19-24"), (29, "25-29"), (34, "30-34"), (64, "60-64")]:
+            b = c.post("/api/v1/diagnose", json=dict(SAMPLE, age=age)).json()
+            assert b["age_band"] == expected, f"{age}세 -> {b['age_band']}"
+
+
+def test_selfcheck_returns_estimated_result():
+    """도구 없는 간편 자가진단. 결과는 추정치이며 그렇게 표시돼야 한다."""
+    with TestClient(app) as c:
+        r = c.post("/api/v1/selfcheck", json={
+            "device_id": "test-self-0001", "gender": "F", "age": 41,
+            "strength": 1, "endurance": 0, "flex": 2, "cardio": 3, "power": 2,
+            "activity": 1,
+        })
+        assert r.status_code == 200, r.text
+        b = r.json()
+        assert b["estimated"] is True
+        assert b["notice"]
+        assert b["age_band"] == "40-44"
+        assert len(b["factors"]) == 5
+        # 점수가 가장 낮은 두 요인이 약점으로 나와야 한다
+        assert set(b["weak_factors"]) == {"endurance", "strength"}
+        assert b["items"] == []
+        assert b["bmi"] is None
+
+
+def test_selfcheck_result_drives_recommendation():
+    """자가진단 결과로도 추천이 돌아가야 한다. 약점 요인만 알면 되기 때문이다."""
+    with TestClient(app) as c:
+        s = c.post("/api/v1/selfcheck", json={
+            "device_id": "test-self-0002", "gender": "M", "age": 33,
+            "strength": 0, "endurance": 1, "flex": 3, "cardio": 2, "power": 3,
+            "activity": 2,
+        }).json()
+        r = c.post("/api/v1/recommend", json={
+            "device_id": "test-self-0002",
+            "diagnosis_id": s["diagnosis_id"],
+            "work_lat": 37.5665, "work_lng": 126.9780,
+            "home_lat": 37.4979, "home_lng": 127.0276,
+            "leave_time": "18:30", "max_distance_km": 5.0,
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["query"]["weak_factors"] == s["weak_factors"]
+        assert body["total"] >= 1
 
 
 def test_recommend_ranks_courses_for_weak_factors():
@@ -84,7 +150,7 @@ def test_recommend_without_diagnosis_id():
     with TestClient(app) as c:
         r = c.post("/api/v1/recommend", json={
             "device_id": "no-diag",
-            "weak_factors": ["flex", "balance"],
+            "weak_factors": ["flex", "power"],
             "work_lat": 37.5665, "work_lng": 126.9780,
             "home_lat": 37.4979, "home_lng": 127.0276,
             "leave_time": "18:30", "max_distance_km": 3.0,
@@ -131,7 +197,7 @@ def test_address_is_joined_everywhere():
 
         rec = c.post("/api/v1/recommend", json={
             "device_id": "addr-test",
-            "weak_factors": ["flex", "balance"],
+            "weak_factors": ["flex", "power"],
             "work_lat": 37.5665, "work_lng": 126.9780,
             "home_lat": 37.4979, "home_lng": 127.0276,
             "leave_time": "18:30", "max_distance_km": 5.0,

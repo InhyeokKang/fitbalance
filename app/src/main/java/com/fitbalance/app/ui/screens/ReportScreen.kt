@@ -103,7 +103,7 @@ private fun ReportBody(
                             )
                         }
                         Text(
-                            "4개 요인 백분위 평균",
+                            "5개 요인 백분위 평균",
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.5f),
                         )
@@ -133,12 +133,32 @@ private fun ReportBody(
                         .background(Color.White.copy(alpha = 0.07f))
                         .padding(horizontal = 11.dp, vertical = 5.dp)
                 ) {
+                    val who = "${if (r.gender == "M") "남성" else "여성"} · ${r.ageBandLabel ?: r.ageBand}"
                     Text(
-                        "${if (r.gender == "M") "남성" else "여성"} · ${r.ageBand.replace("s", "대")} 기준표와 대조",
+                        if (r.estimated) "$who · 설문 기반 추정" else "$who 기준표와 대조",
                         fontSize = 11.sp,
                         color = Color.White.copy(alpha = 0.6f),
                     )
                 }
+            }
+        }
+
+        // 추정치는 기준표와 대조한 값이 아니다. 결과를 보기 전에 분명히 알린다.
+        if (r.estimated) {
+            VSpace(12)
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brand.MintSoft)
+                    .padding(14.dp)
+            ) {
+                Text(
+                    r.notice ?: "설문으로 추정한 참고용 결과입니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Brand.MintDeep,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
 
@@ -160,7 +180,10 @@ private fun ReportBody(
                 val weakNames = r.factors.filter { it.factor in r.weakFactors }
                     .joinToString("·") { it.label }
                 Text(
-                    "같은 성별·나이대 100명과 비교한 순위입니다. 숫자가 작을수록 좋습니다.\n" +
+                    (if (r.estimated)
+                        "설문 답변으로 추정한 순위입니다. 숫자가 작을수록 좋습니다.\n"
+                    else
+                        "같은 성별·나이대 100명과 비교한 순위입니다. 숫자가 작을수록 좋습니다.\n") +
                         "$weakNames 이(가) 가장 뒤처진 두 요인이며, 추천 강좌는 이 둘을 기준으로 고릅니다.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Brand.Muted2,
@@ -168,6 +191,7 @@ private fun ReportBody(
             }
         }
 
+        if (r.items.isNotEmpty()) {
         SectionHeader("측정 항목 상세")
         AppCard {
             Column {
@@ -207,37 +231,41 @@ private fun ReportBody(
                 }
             }
         }
+        }
 
-        SectionHeader("체질량지수")
-        AppCard {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text("BMI", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        if (r.bmi.inNormalRange) "정상 구간입니다" else "정상 구간(18.5~23)을 벗어났습니다",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Brand.Muted2,
-                    )
-                }
-                val color = if (r.bmi.inNormalRange) Brand.MintDeep else Brand.Coral
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${r.bmi.value}",
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.7).sp,
-                        color = color,
-                    )
-                    Text(
-                        r.bmi.category,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = color,
-                    )
+        // BMI는 키·몸무게를 받은 정밀 진단에만 있다.
+        r.bmi?.let { bmi ->
+            SectionHeader("체질량지수")
+            AppCard {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("BMI", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (bmi.inNormalRange) "정상 구간입니다" else "정상 구간(18.5~23)을 벗어났습니다",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Brand.Muted2,
+                        )
+                    }
+                    val color = if (bmi.inNormalRange) Brand.MintDeep else Brand.Coral
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "${bmi.value}",
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.7).sp,
+                            color = color,
+                        )
+                        Text(
+                            bmi.category,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = color,
+                        )
+                    }
                 }
             }
         }

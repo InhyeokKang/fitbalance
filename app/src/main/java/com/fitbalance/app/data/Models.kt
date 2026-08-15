@@ -14,7 +14,23 @@ data class DiagnoseRequest(
     @SerializedName("sit_up") val sitUp: Int,
     @SerializedName("sit_reach_cm") val sitReachCm: Double,
     @SerializedName("shuttle_run") val shuttleRun: Int,
-    @SerializedName("one_leg_stand_sec") val oneLegStandSec: Double,
+    @SerializedName("standing_jump_cm") val standingJumpCm: Double,
+)
+
+/**
+ * 도구 없이 답하는 간편 자가진단. 각 문항 0~3점이며 클수록 좋다.
+ * 결과는 기준표와 대조한 값이 아니라 추정치다.
+ */
+data class SelfCheckRequest(
+    @SerializedName("device_id") val deviceId: String,
+    val gender: String,
+    val age: Int,
+    val strength: Int,
+    val endurance: Int,
+    val flex: Int,
+    val cardio: Int,
+    val power: Int,
+    val activity: Int,
 )
 
 data class FactorScore(
@@ -43,14 +59,19 @@ data class DiagnoseResponse(
     @SerializedName("diagnosis_id") val diagnosisId: String,
     @SerializedName("measured_at") val measuredAt: String,
     @SerializedName("age_band") val ageBand: String,
+    @SerializedName("age_band_label") val ageBandLabel: String? = null,
     val gender: String,
+    /** 간편 자가진단으로 얻은 추정치이면 true. 화면에 "참고용"을 표시한다. */
+    val estimated: Boolean = false,
+    /** estimated일 때 함께 보여줄 안내 문구. */
+    val notice: String? = null,
     @SerializedName("total_score") val totalScore: Int,
     @SerializedName("imbalance_type") val imbalanceType: String,
     @SerializedName("imbalance_desc") val imbalanceDesc: String,
     val factors: List<FactorScore>,
     @SerializedName("weak_factors") val weakFactors: List<String>,
-    val items: List<ItemScore>,
-    val bmi: BmiResult,
+    val items: List<ItemScore> = emptyList(),
+    val bmi: BmiResult? = null,
 )
 
 data class RecommendRequest(
@@ -68,9 +89,10 @@ data class RecommendRequest(
 
 data class CourseTags(
     val strength: Int,
+    val endurance: Int,
     val flex: Int,
     val cardio: Int,
-    val balance: Int,
+    val power: Int,
 )
 
 data class Course(

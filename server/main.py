@@ -25,47 +25,78 @@ KST = timezone(timedelta(hours=9))
 # ---------------------------------------------------------------- 도메인 상수
 
 # 측정 항목 정의: 코드 -> (한글명, 단위, 입력 허용 최소, 최대)
+#
+# 국민체력100 '성인기(만 19~64세)' 인증 측정항목을 따른다.
+# 평형성(눈감고외발서기)은 어르신기 항목이라 여기서 쓰지 않는다. 대신 순발력을 둔다.
+# 출처: https://nfa.kspo.or.kr/reserve/0/selectMeasureGradeItemListByAgeSe.kspo
 ITEM_META = {
     "grip": ("상대악력", "%", 10.0, 150.0),
     "sit_up": ("교차윗몸일으키기", "회", 0.0, 100.0),
     "sit_reach": ("앉아윗몸앞으로굽히기", "cm", -30.0, 40.0),
     "shuttle_run": ("왕복오래달리기", "회", 0.0, 120.0),
-    "one_leg_stand": ("눈감고외발서기", "초", 0.0, 120.0),
+    "standing_jump": ("제자리멀리뛰기", "cm", 30.0, 350.0),
 }
 
+# 체력요인도 공단 분류를 따른다. 교차윗몸일으키기는 근력이 아니라 근지구력이다.
 FACTOR_LABEL = {
     "strength": "근력",
+    "endurance": "근지구력",
     "flex": "유연성",
     "cardio": "심폐지구력",
-    "balance": "평형성",
+    "power": "순발력",
 }
-FACTOR_ORDER = ["strength", "flex", "cardio", "balance"]
+FACTOR_ORDER = ["strength", "endurance", "flex", "cardio", "power"]
 
-# 약점 요인 조합 -> 불균형 유형명과 설명
+# 측정 항목 -> 체력요인
+ITEM_TO_FACTOR = {
+    "grip": "strength",
+    "sit_up": "endurance",
+    "sit_reach": "flex",
+    "shuttle_run": "cardio",
+    "standing_jump": "power",
+}
+
+# 약점 요인 조합(2개) -> 불균형 유형명과 설명. 5개 요인이므로 10가지 조합이 나온다.
 IMBALANCE_TYPES = {
-    frozenset(["flex", "balance"]): (
+    frozenset(["strength", "endurance"]): (
+        "코어 약화형",
+        "근력과 근지구력이 함께 낮아 몸통을 버티는 힘이 약합니다. 오래 앉아 있으면 허리 부담이 커지기 쉽습니다.",
+    ),
+    frozenset(["strength", "flex"]): (
+        "근력·유연성 동반 저하형",
+        "근력과 유연성이 함께 낮아 부상 위험이 큽니다. 저강도 근력 운동부터 시작하는 것이 좋습니다.",
+    ),
+    frozenset(["strength", "cardio"]): (
+        "체력 저하 번아웃형",
+        "근력과 심폐지구력이 모두 낮습니다. 만성 피로로 이어지기 쉬운 상태입니다.",
+    ),
+    frozenset(["strength", "power"]): (
+        "근파워 저하형",
+        "힘을 내는 능력과 순간적으로 폭발시키는 능력이 함께 낮습니다. 계단이나 급한 걸음에서 먼저 느껴집니다.",
+    ),
+    frozenset(["endurance", "flex"]): (
         "유연성 저하 좌식형",
-        "근력은 유지되고 있으나 유연성과 평형성이 뒤처져, 장시간 앉은 자세로 인한 전형적 불균형 패턴입니다.",
+        "몸통 지구력과 유연성이 뒤처져, 장시간 앉은 자세로 인한 전형적 불균형 패턴입니다.",
+    ),
+    frozenset(["endurance", "cardio"]): (
+        "지구력 부족형",
+        "근지구력과 심폐지구력이 모두 낮아 활동을 오래 이어가기 어렵습니다.",
+    ),
+    frozenset(["endurance", "power"]): (
+        "하체 기능 저하형",
+        "버티는 힘과 튀어 오르는 힘이 함께 낮습니다. 앉아 있는 시간이 길수록 두드러집니다.",
     ),
     frozenset(["flex", "cardio"]): (
         "경직 저활동형",
         "몸이 굳어 있고 심폐지구력도 낮아, 활동량 자체가 부족한 상태입니다.",
     ),
-    frozenset(["flex", "strength"]): (
-        "근력·유연성 동반 저하형",
-        "근력과 유연성이 함께 낮아 부상 위험이 큽니다. 저강도 근력 운동부터 시작하는 것이 좋습니다.",
+    frozenset(["flex", "power"]): (
+        "경직 둔화형",
+        "관절 가동 범위가 좁고 순발력도 낮습니다. 갑작스러운 움직임에서 다치기 쉽습니다.",
     ),
-    frozenset(["cardio", "strength"]): (
-        "체력 저하 번아웃형",
-        "근력과 심폐지구력이 모두 낮습니다. 만성 피로로 이어지기 쉬운 상태입니다.",
-    ),
-    frozenset(["cardio", "balance"]): (
-        "지구력 부족 불안정형",
-        "심폐지구력과 평형성이 낮아 장시간 활동 시 자세가 쉽게 무너집니다.",
-    ),
-    frozenset(["strength", "balance"]): (
-        "코어 약화형",
-        "근력과 평형성이 낮아 코어가 약해진 상태로, 허리 부담이 커지기 쉽습니다.",
+    frozenset(["cardio", "power"]): (
+        "활동량 부족형",
+        "심폐지구력과 순발력이 낮습니다. 평소 움직임의 강도가 전반적으로 낮은 상태입니다.",
     ),
 }
 
@@ -95,7 +126,8 @@ def load_csv_to_sqlite() -> tuple[int, int]:
         CREATE TABLE courses (
             course_id TEXT PRIMARY KEY, title TEXT, facility TEXT,
             lat REAL, lng REAL, weekday TEXT, start_time TEXT, sport TEXT,
-            tag_strength INTEGER, tag_flex INTEGER, tag_cardio INTEGER, tag_balance INTEGER
+            tag_strength INTEGER, tag_endurance INTEGER, tag_flex INTEGER,
+            tag_cardio INTEGER, tag_power INTEGER
         );
         DROP TABLE IF EXISTS facility_addresses;
         CREATE TABLE facility_addresses (
@@ -132,7 +164,7 @@ def load_csv_to_sqlite() -> tuple[int, int]:
         reader = csv.DictReader(f)
         expected = [
             "course_id", "title", "facility", "lat", "lng", "weekday", "start_time",
-            "sport", "tag_strength", "tag_flex", "tag_cardio", "tag_balance",
+            "sport", "tag_strength", "tag_endurance", "tag_flex", "tag_cardio", "tag_power",
         ]
         if reader.fieldnames != expected:
             raise RuntimeError(f"courses.csv 열 구성이 계약과 다릅니다: {reader.fieldnames} (기대: {expected})")
@@ -140,11 +172,12 @@ def load_csv_to_sqlite() -> tuple[int, int]:
             (
                 r["course_id"], r["title"], r["facility"], float(r["lat"]), float(r["lng"]),
                 r["weekday"], r["start_time"], r["sport"],
-                int(r["tag_strength"]), int(r["tag_flex"]), int(r["tag_cardio"]), int(r["tag_balance"]),
+                int(r["tag_strength"]), int(r["tag_endurance"]), int(r["tag_flex"]),
+                int(r["tag_cardio"]), int(r["tag_power"]),
             )
             for r in reader
         ]
-    cur.executemany("INSERT INTO courses VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", course_rows)
+    cur.executemany("INSERT INTO courses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", course_rows)
 
     # 시설 주소 참조표. courses.csv 스키마가 계약으로 고정돼 있어 별도 파일로 둔다.
     # 없거나 일부 시설이 빠져 있어도 동작해야 한다(그 시설은 주소 없이 표시).
@@ -175,14 +208,25 @@ def load_csv_to_sqlite() -> tuple[int, int]:
 # ---------------------------------------------------------------- 계산 로직
 
 
+# 국민체력100 인증기준은 5세 단위로 나뉜다. 10세로 묶으면 기준이 뭉개진다.
+AGE_BANDS = [
+    (19, 24, "19-24"), (25, 29, "25-29"), (30, 34, "30-34"), (35, 39, "35-39"),
+    (40, 44, "40-44"), (45, 49, "45-49"), (50, 54, "50-54"), (55, 59, "55-59"),
+    (60, 64, "60-64"),
+]
+
+
 def age_to_band(age: int) -> str:
-    if age < 30:
-        return "20s"
-    if age < 40:
-        return "30s"
-    if age < 50:
-        return "40s"
-    return "50s"
+    for low, high, name in AGE_BANDS:
+        if low <= age <= high:
+            return name
+    # 성인기 범위 밖은 가장 가까운 구간으로 붙인다(입력 검증에서 이미 19~64로 막혀 있다).
+    return AGE_BANDS[0][2] if age < 19 else AGE_BANDS[-1][2]
+
+
+def band_label(band: str) -> str:
+    """화면에 보여줄 나이대 표기. '30-34' -> '30~34세'"""
+    return band.replace("-", "~") + "세"
 
 
 def percentile_of(conn: sqlite3.Connection, gender: str, band: str, item: str, value: float) -> float:
@@ -283,7 +327,7 @@ def parse_hhmm(text: str) -> int:
 
 def imbalance_of(weak: list[str], factor_pct: dict[str, float]) -> tuple[str, str]:
     if all(v >= 60 for v in factor_pct.values()):
-        return "균형 양호형", "네 가지 체력요인이 모두 평균 이상입니다. 현재 활동량을 유지하세요."
+        return "균형 양호형", "다섯 가지 체력요인이 모두 평균 이상입니다. 현재 활동량을 유지하세요."
     found = IMBALANCE_TYPES.get(frozenset(weak))
     if found:
         return found
@@ -304,7 +348,21 @@ class DiagnoseRequest(BaseModel):
     sit_up: int = Field(ge=0, le=100)
     sit_reach_cm: float = Field(ge=-30, le=40)
     shuttle_run: int = Field(ge=0, le=120)
-    one_leg_stand_sec: float = Field(ge=0, le=120)
+    standing_jump_cm: float = Field(ge=30, le=350)
+
+
+class SelfCheckRequest(BaseModel):
+    """도구 없이 답하는 간편 자가진단. 각 문항은 0~3점이며 클수록 좋다."""
+
+    device_id: str
+    gender: Literal["M", "F"]
+    age: int = Field(ge=19, le=64)
+    strength: int = Field(ge=0, le=3)
+    endurance: int = Field(ge=0, le=3)
+    flex: int = Field(ge=0, le=3)
+    cardio: int = Field(ge=0, le=3)
+    power: int = Field(ge=0, le=3)
+    activity: int = Field(ge=0, le=3)
 
 
 class RecommendRequest(BaseModel):
@@ -364,7 +422,7 @@ def diagnose(req: DiagnoseRequest):
             "sit_up": float(req.sit_up),
             "sit_reach": req.sit_reach_cm,
             "shuttle_run": float(req.shuttle_run),
-            "one_leg_stand": req.one_leg_stand_sec,
+            "standing_jump": req.standing_jump_cm,
         }
 
         items = []
@@ -380,12 +438,8 @@ def diagnose(req: DiagnoseRequest):
                 "percentile": round(p), "grade": grade_of(p),
             })
 
-        factor_pct = {
-            "strength": round((pct["grip"] + pct["sit_up"]) / 2, 1),
-            "flex": pct["sit_reach"],
-            "cardio": pct["shuttle_run"],
-            "balance": pct["one_leg_stand"],
-        }
+        # 항목 하나가 요인 하나에 대응한다(공단 분류와 동일).
+        factor_pct = {ITEM_TO_FACTOR[item]: p for item, p in pct.items()}
         factors = [
             {
                 "factor": f, "label": FACTOR_LABEL[f],
@@ -403,8 +457,10 @@ def diagnose(req: DiagnoseRequest):
             "diagnosis_id": diagnosis_id,
             "measured_at": now.isoformat(timespec="seconds"),
             "age_band": band,
+            "age_band_label": band_label(band),
             "gender": req.gender,
-            "total_score": round(sum(factor_pct.values()) / 4),
+            "estimated": False,
+            "total_score": round(sum(factor_pct.values()) / len(FACTOR_ORDER)),
             "imbalance_type": type_name,
             "imbalance_desc": type_desc,
             "factors": factors,
@@ -423,6 +479,74 @@ def diagnose(req: DiagnoseRequest):
         conn.close()
 
 
+@app.post("/api/v1/selfcheck")
+def selfcheck(req: SelfCheckRequest):
+    """
+    도구 없이 하는 간편 자가진단.
+
+    측정 장비가 없는 사용자를 위한 진입로다. 문항 점수(0~3)를 백분위로 환산하는데,
+    이 값은 기준표와 대조한 결과가 아니라 **추정치**다. 응답의 estimated=true 로
+    화면에서 '참고용'임을 반드시 밝힌다.
+    """
+    band = age_to_band(req.age)
+
+    # 0~3점을 백분위 대표값으로 환산. 문항이 4지선다라 구간 중앙값을 쓴다.
+    SCORE_TO_PCT = {0: 15.0, 1: 38.0, 2: 62.0, 3: 85.0}
+    answers = {
+        "strength": req.strength,
+        "endurance": req.endurance,
+        "flex": req.flex,
+        "cardio": req.cardio,
+        "power": req.power,
+    }
+    # 주간 활동량은 전체를 조금 끌어올리거나 내린다. 한 문항이 결과를 뒤집지 않도록 폭을 좁게 둔다.
+    activity_shift = (req.activity - 1.5) * 4.0
+
+    factor_pct = {
+        f: max(1.0, min(99.0, SCORE_TO_PCT[score] + activity_shift))
+        for f, score in answers.items()
+    }
+    factors = [
+        {
+            "factor": f, "label": FACTOR_LABEL[f],
+            "percentile": round(factor_pct[f]), "grade": grade_of(factor_pct[f]),
+        }
+        for f in FACTOR_ORDER
+    ]
+    weak = [f for f, _ in sorted(factor_pct.items(), key=lambda kv: kv[1])[:2]]
+    type_name, type_desc = imbalance_of(weak, factor_pct)
+
+    now = datetime.now(KST)
+    diagnosis_id = f"s_{now:%Y%m%d}_{uuid.uuid4().hex[:8]}"
+    result = {
+        "diagnosis_id": diagnosis_id,
+        "measured_at": now.isoformat(timespec="seconds"),
+        "age_band": band,
+        "age_band_label": band_label(band),
+        "gender": req.gender,
+        "estimated": True,
+        "notice": "설문으로 추정한 참고용 결과입니다. 정확한 진단은 무료 체력인증센터 측정을 권합니다.",
+        "total_score": round(sum(factor_pct.values()) / len(FACTOR_ORDER)),
+        "imbalance_type": type_name,
+        "imbalance_desc": type_desc,
+        "factors": factors,
+        "weak_factors": weak,
+        "items": [],
+        "bmi": None,
+    }
+
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO diagnoses VALUES (?,?,?,?,?,?)",
+            (diagnosis_id, req.device_id, now.isoformat(), req.gender, band, ",".join(weak)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return result
+
+
 def _course_dict(r: sqlite3.Row) -> dict:
     keys = r.keys()
     return {
@@ -431,10 +555,7 @@ def _course_dict(r: sqlite3.Row) -> dict:
         "address": (r["address"] if "address" in keys else None) or None,
         "sport": r["sport"], "weekday": r["weekday"], "start_time": r["start_time"],
         "lat": r["lat"], "lng": r["lng"],
-        "tags": {
-            "strength": r["tag_strength"], "flex": r["tag_flex"],
-            "cardio": r["tag_cardio"], "balance": r["tag_balance"],
-        },
+        "tags": {f: r[f"tag_{f}"] for f in FACTOR_ORDER},
     }
 
 
@@ -462,7 +583,7 @@ def recommend(req: RecommendRequest):
 
         scored = []
         for r in conn.execute("SELECT c.*, fa.address AS address FROM courses c LEFT JOIN facility_addresses fa ON fa.facility = c.facility").fetchall():
-            course_vec = [r["tag_strength"], r["tag_flex"], r["tag_cardio"], r["tag_balance"]]
+            course_vec = [r[f"tag_{f}"] for f in FACTOR_ORDER]
             if sum(course_vec) == 0:
                 continue
 

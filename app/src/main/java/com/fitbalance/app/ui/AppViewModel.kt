@@ -10,6 +10,7 @@ import com.fitbalance.app.data.DiagnoseResponse
 import com.fitbalance.app.data.Prefs
 import com.fitbalance.app.data.RecommendRequest
 import com.fitbalance.app.data.RecommendResponse
+import com.fitbalance.app.data.SelfCheckRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,6 +80,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _diagnosis.value = UiState.Loading
         viewModelScope.launch {
             _diagnosis.value = runCatchingApi { ApiClient.service.diagnose(req) }
+        }
+    }
+
+    /** 측정 장비가 없는 사용자를 위한 간편 자가진단. 결과는 진단과 같은 화면에 흐른다. */
+    fun selfCheck(req: SelfCheckRequest) {
+        _diagnosis.value = UiState.Loading
+        viewModelScope.launch {
+            _diagnosis.value = runCatchingApi { ApiClient.service.selfCheck(req) }
         }
     }
 

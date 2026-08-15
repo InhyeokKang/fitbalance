@@ -42,7 +42,7 @@ import com.fitbalance.app.ui.theme.Brand
 
 private val FACTOR_LABEL = mapOf(
     "strength" to "근력", "flex" to "유연성",
-    "cardio" to "심폐지구력", "balance" to "평형성",
+    "cardio" to "심폐지구력", "power" to "순발력", "endurance" to "근지구력",
 )
 
 @Composable
