@@ -12,7 +12,30 @@
 <meta name="theme-color" content="#0C1112">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230C1112'/><ellipse cx='50' cy='51' rx='31' ry='35' fill='%2300D68F'/><path d='M31.8 42.5 Q37 36.5 42.2 42.5 M57.8 42.5 Q63 36.5 68.2 42.5' stroke='%230C1112' stroke-width='4' fill='none' stroke-linecap='round'/><path d='M45.3 56.5 Q50 61.5 54.7 56.5' stroke='%230C1112' stroke-width='3' fill='none' stroke-linecap='round'/></svg>">
 
+<link rel="preload" href="fonts/Pretendard-subset.woff2" as="font" type="font/woff2" crossorigin>
+
 <style>
+/* ─────────────────────────────────────────────────────────
+   한글 웹폰트.
+
+   지정하지 않으면 OS 기본 글꼴로 갈린다.
+   윈도우 크롬은 맑은 고딕, 안드로이드는 본고딕이 잡혀 같은 페이지가
+   기기마다 다르게 보인다. Pretendard 하나로 통일한다.
+
+   저장소에 직접 넣는다(외부 CDN 의존 없음). 한글 상용 2,350자와
+   페이지에 쓰인 글자만 남겨 2,009KB -> 416KB 로 줄였다.
+   가변 폰트라 파일 하나로 굵기 45~930 을 모두 쓴다.
+   라이선스: SIL OFL 1.1 (fonts/LICENSE-Pretendard.txt)
+   ───────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Pretendard";
+  src: url("fonts/Pretendard-subset.woff2") format("woff2-variations"),
+       url("fonts/Pretendard-subset.woff2") format("woff2");
+  font-weight: 45 930;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ═══════════════════════════════════════════════════════════
    팔레트·라운딩은 앱(ui/theme/Theme.kt)에서 그대로 가져왔다.
    ═══════════════════════════════════════════════════════════ */
@@ -31,10 +54,11 @@ html { scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
 
 body {
   margin:0; background:var(--bg); color:var(--text);
-  font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Segoe UI",
-              "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  font-family:"Pretendard","Pretendard Variable",system-ui,-apple-system,
+              "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
   font-size:16px; line-height:1.7; letter-spacing:-.015em;
   -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
 
   /* 한국어는 단어 중간에서 끊기면 읽기 나쁘다. 어절 단위로만 넘긴다. */
   word-break:keep-all;
@@ -291,7 +315,7 @@ section { padding:clamp(58px, 8vw, 100px) 0; }
 @media (max-width:860px){ .sources { grid-template-columns:1fr; } }
 .source { background:var(--bg); border:1px solid var(--line); border-radius:var(--r-md); padding:26px; }
 .source .k { font-size:12.5px; font-weight:700; color:var(--mint-deep); }
-.source .v { font-size:clamp(22px,2.6vw,28px); font-weight:800; letter-spacing:-.04em; margin:6px 0 4px; }
+.source .v { font-size:clamp(22px,2.6vw,28px); font-weight:800; letter-spacing:-.04em; margin:6px 0 4px; font-variant-numeric:tabular-nums; }
 .source .d { font-size:13.5px; color:var(--muted); }
 .source .o { font-size:12px; color:var(--muted-2); margin-top:12px; }
 
