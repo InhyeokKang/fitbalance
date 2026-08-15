@@ -21,3 +21,6 @@ server_err.log
 *.iml
 .vscode/
 .venv/
+
+# 원자료 표본 (50MB+). 필요하면 tools/fetch_kspo.py 로 다시 받는다
+data/raw/
