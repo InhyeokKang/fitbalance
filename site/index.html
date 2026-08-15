@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fitbalance — 앉아서 일하는 몸을 위한 공공 체육 안내</title>
+<meta name="description" content="국민체력100 실측 자료로 약한 곳을 찾고, 퇴근길 동선 안의 공공 체육 강좌와 시설을 추천합니다.">
+<meta property="og:title" content="fitbalance">
+<meta property="og:description" content="앉아서 일하는 몸, 어디가 무너졌는지부터 봅니다.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230C1112'/><ellipse cx='50' cy='51' rx='31' ry='35' fill='%2300D68F'/><path d='M31.8 42.5 Q37 36.5 42.2 42.5 M57.8 42.5 Q63 36.5 68.2 42.5' stroke='%230C1112' stroke-width='4' fill='none' stroke-linecap='round'/><path d='M45.3 56.5 Q50 61.5 54.7 56.5' stroke='%230C1112' stroke-width='3' fill='none' stroke-linecap='round'/></svg>">
+
+<style>
+/* ─────────────────────────────────────────────────────────
+   앱과 같은 팔레트. app/src/main/java/.../ui/theme/Theme.kt 에서 가져왔다.
+   ───────────────────────────────────────────────────────── */
+:root {
+  --ink: #0C1112;
+  --ink2: #182124;
+  --bg: #F2F5F4;
+  --surface: #FFFFFF;
+  --line: #E3EAE8;
+  --track: #EDF1F0;
+  --muted: #55635F;
+  --muted2: #8A9793;
+  --mint: #00D68F;
+  --mint-bright: #12F0A3;
+  --mint-deep: #00A874;
+  --mint-soft: #DFF9EF;
+  --coral: #FF6B5A;
+  --amber: #FFB020;
+  --radius: 22px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}
+
+.wrap { width: min(1080px, calc(100% - 40px)); margin-inline: auto; }
+
+/* ── 워드마크 ─────────────────────────────────────────── */
+.wordmark { font-weight: 800; letter-spacing: -0.045em; }
+.wordmark b { color: var(--ink); font-weight: 800; }
+.wordmark span { color: var(--mint-deep); font-weight: 800; }
+.wordmark--dark b { color: #fff; }
+.wordmark--dark span { color: var(--mint-bright); }
+
+/* ── 상단 바 ──────────────────────────────────────────── */
+header {
+  position: sticky; top: 0; z-index: 20;
+  background: rgba(242,245,244,.86);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+header .wrap {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 62px;
+}
+.brand { display: flex; align-items: center; gap: 8px; font-size: 19px; }
+.dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--mint-bright), #00C283);
+}
+.nav { display: flex; gap: 22px; font-size: 14px; }
+.nav a { color: var(--muted); text-decoration: none; font-weight: 600; }
+.nav a:hover { color: var(--ink); }
+@media (max-width: 720px) { .nav { display: none; } }
+
+/* ── 히어로 ───────────────────────────────────────────── */
+.hero { padding: 64px 0 8px; }
+.hero-card {
+  background: linear-gradient(135deg, #101A1B 0%, var(--ink) 55%, #0F2420 100%);
+  border-radius: 32px;
+  padding: 52px 48px;
+  color: #fff;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero-card::after {
+  content: ""; position: absolute; inset: auto -80px -140px auto;
+  width: 380px; height: 380px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,214,143,.20), transparent 68%);
+  pointer-events: none;
+}
+.eyebrow {
+  font-size: 12px; font-weight: 700; letter-spacing: .06em;
+  color: var(--mint-bright); margin-bottom: 14px;
+}
+.hero h1 {
+  margin: 0 0 16px; font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.28; letter-spacing: -0.035em; font-weight: 800;
+}
+.hero p { margin: 0; color: rgba(255,255,255,.72); font-size: 16px; }
+.hero-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.tag {
+  font-size: 12px; padding: 6px 12px; border-radius: 20px;
+  background: rgba(255,255,255,.08); color: rgba(255,255,255,.72);
+}
+@media (max-width: 820px) {
+  .hero-card { grid-template-columns: 1fr; padding: 38px 26px; text-align: left; }
+  .hero-mascot { justify-self: center; }
+}
+
+/* ── 섹션 ─────────────────────────────────────────────── */
+section { padding: 62px 0; }
+.section-label {
+  font-size: 12px; font-weight: 700; letter-spacing: .06em;
+  color: var(--mint-deep); margin-bottom: 10px;
+}
+h2 {
+  margin: 0 0 10px; font-size: clamp(24px, 3.4vw, 32px);
+  letter-spacing: -0.035em; font-weight: 800;
+}
+.lede { margin: 0 0 34px; color: var(--muted); font-size: 16px; max-width: 62ch; }
+
+/* ── 카드 ─────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 26px;
+  border: 1px solid var(--line);
+}
+.grid { display: grid; gap: 16px; }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 880px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+
+/* ── 다운로드 ─────────────────────────────────────────── */
+.dl {
+  display: flex; flex-direction: column; gap: 14px;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.dl:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(12,17,18,.09); }
+.dl-top { display: flex; align-items: center; gap: 14px; }
+.dl h3 { margin: 0; font-size: 19px; letter-spacing: -0.03em; }
+.dl .os { font-size: 12px; color: var(--muted2); }
+.dl p { margin: 0; color: var(--muted); font-size: 14px; flex: 1; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px 20px; border-radius: 16px; font-weight: 700; font-size: 15px;
+  text-decoration: none; border: none; cursor: pointer;
+  transition: filter .15s ease;
+}
+.btn:hover { filter: brightness(1.05); }
+.btn-primary {
+  background: linear-gradient(135deg, var(--mint-bright), #00C283);
+  color: #04120D;
+}
+.btn-dark { background: var(--ink); color: #fff; }
+.btn-ghost {
+  background: transparent; color: var(--muted);
+  border: 1.5px solid var(--line);
+}
+.meta { font-size: 12px; color: var(--muted2); }
+
+/* ── 단계 ─────────────────────────────────────────────── */
+.step { text-align: center; }
+.step .num {
+  display: inline-block; font-size: 12px; font-weight: 700;
+  color: var(--mint-deep); background: var(--mint-soft);
+  padding: 4px 11px; border-radius: 20px; margin-bottom: 14px;
+}
+.step h3 { margin: 12px 0 8px; font-size: 18px; letter-spacing: -0.03em; }
+.step p { margin: 0; color: var(--muted); font-size: 14px; }
+
+/* ── 데이터 수치 ──────────────────────────────────────── */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+@media (max-width: 880px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: var(--surface); border: 1px solid var(--line);
+        border-radius: 18px; padding: 22px; }
+.stat .n {
+  font-size: 30px; font-weight: 800; letter-spacing: -0.04em;
+  color: var(--mint-deep); line-height: 1.15;
+}
+.stat .l { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.stat .s { font-size: 11px; color: var(--muted2); margin-top: 8px; }
+
+/* ── 안내 박스 ────────────────────────────────────────── */
+.note {
+  background: var(--mint-soft); border-radius: 18px; padding: 20px 22px;
+  display: flex; gap: 16px; align-items: flex-start;
+  color: var(--mint-deep); font-size: 14px;
+}
+.note strong { display: block; margin-bottom: 4px; }
+
+/* ── 푸터 ─────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line); padding: 40px 0 56px;
+  color: var(--muted2); font-size: 13px;
+}
+footer .wrap { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+footer a { color: var(--muted); }
+
+/* ── 마스코트 ─────────────────────────────────────────── */
+.mascot { display: block; overflow: visible; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.bob { animation: bob 1.9s ease-in-out infinite; }
+.bob-fast { animation: bob 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .bob, .bob-fast { animation: none; } }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     마스코트 스프라이트.
+     앱의 Mascot.kt 를 그대로 옮겼다(캔버스 100 기준 좌표 동일).
+     외부 파일로 두면 file:// 에서 CORS로 막혀 인라인으로 둔다.
+     ═══════════════════════════════════════════════════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="m-base">
+      <ellipse cx="50" cy="90.7" rx="24.8" ry="2.75" fill="#000" opacity=".07"/>
+      <path d="M37.6 85 L33.9 94 M62.4 85 L66.1 94"
+            stroke="#00D68F" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M22.7 58 L15.3 63 M77.3 58 L84.7 63"
+            stroke="#00D68F" stroke-width="4.8" stroke-linecap="round"/>
+      <ellipse cx="50" cy="51" rx="31" ry="35" fill="#00D68F"/>
+      <ellipse cx="50" cy="59.4" rx="16.1" ry="14" fill="#fff" opacity=".22"/>
+      <ellipse cx="30.2" cy="51.3" rx="4.5" ry="2.75" fill="#FF6B5A" opacity=".38"/>
+      <ellipse cx="69.8" cy="51.3" rx="4.5" ry="2.75" fill="#FF6B5A" opacity=".38"/>
+    </g>
+    <g id="m-smile">
+      <path d="M31.8 42.5 Q37 36.5 42.2 42.5 M57.8 42.5 Q63 36.5 68.2 42.5"
+            stroke="#0C1112" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+      <path d="M45.3 56.5 Q50 61.5 54.7 56.5"
+            stroke="#0C1112" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+    </g>
+  </defs>
+
+  <symbol id="happy" viewBox="0 0 100 100">
+    <use href="#m-base"/><use href="#m-smile"/>
+  </symbol>
+
+  <symbol id="workout" viewBox="0 0 100 100">
+    <use href="#m-base"/><use href="#m-smile"/>
+    <path d="M15.3 68 L84.7 68" stroke="#0C1112" stroke-width="3.4" stroke-linecap="round"/>
+    <rect x="11.6" y="59.8" width="7.5" height="16.5" rx="2.6" fill="#0C1112"/>
+    <rect x="80.9" y="59.8" width="7.5" height="16.5" rx="2.6" fill="#0C1112"/>
+  </symbol>
+
+  <symbol id="proud" viewBox="0 0 100 100">
+    <use href="#m-base"/><use href="#m-smile"/>
+    <path d="M82.2 15.5 C83.6 21.6 83.6 21.6 89.7 23 C83.6 24.4 83.6 24.4 82.2 30.5
+             C80.8 24.4 80.8 24.4 74.7 23 C80.8 21.6 80.8 21.6 82.2 15.5 Z" fill="#FFB020"/>
+    <path d="M15.9 32 C16.8 36.1 16.8 36.1 20.9 37 C16.8 37.9 16.8 37.9 15.9 42
+             C15 37.9 15 37.9 10.9 37 C15 36.1 15 36.1 15.9 32 Z" fill="#FFB020"/>
+  </symbol>
+
+  <symbol id="searching" viewBox="0 0 100 100">
+    <use href="#m-base"/>
+    <circle cx="37" cy="44" r="3.2" fill="#0C1112"/>
+    <circle cx="63" cy="44" r="3.2" fill="#0C1112"/>
+    <path d="M45.3 56.5 Q50 61.5 54.7 56.5"
+          stroke="#0C1112" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+    <g transform="rotate(20 81 59.4)">
+      <path d="M87 65.4 L95 73.4" stroke="#0C1112" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="81" cy="59.4" r="8.5" fill="#fff" opacity=".85"/>
+      <circle cx="81" cy="59.4" r="8.5" fill="none" stroke="#0C1112" stroke-width="2.6"/>
+    </g>
+  </symbol>
+
+  <symbol id="worried" viewBox="0 0 100 100">
+    <use href="#m-base"/>
+    <circle cx="37" cy="44" r="3" fill="#0C1112"/>
+    <circle cx="63" cy="44" r="3" fill="#0C1112"/>
+    <path d="M41.5 35.5 L34 38.5 M58.5 35.5 L66 38.5"
+          stroke="#0C1112" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M45.8 56.3 Q50 52.5 54.2 56.3"
+          stroke="#0C1112" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+    <path d="M78.5 20 C83.6 26.1 82.7 30.3 78.5 30.3 C74.3 30.3 73.4 26.1 78.5 20 Z"
+          fill="#6EC6FF"/>
+  </symbol>
+</svg>
+
+
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="wordmark"><b>fit</b><span>balance</span></span>
+    </div>
+    <nav class="nav">
+      <a href="#download">다운로드</a>
+      <a href="#how">쓰는 법</a>
+      <a href="#data">공공데이터</a>
+      <a href="#team">팀</a>
+    </nav>
+  </div>
+</header>
+
+
+<div class="hero wrap">
+  <div class="hero-card">
+    <div>
+      <div class="eyebrow">국민체력100 · 공공체육시설 공공데이터 기반</div>
+      <h1>앉아서 일하는 몸,<br>어디가 무너졌는지<br>부터 봅니다</h1>
+      <p>줄자와 초시계로 3가지만 재면 또래 100명 중 몇 등인지 나옵니다.<br>
+         약한 곳에 맞는 퇴근길 강좌와 공공 체육시설로 이어 드립니다.</p>
+      <div class="hero-tags">
+        <span class="tag">근력</span>
+        <span class="tag">근지구력</span>
+        <span class="tag">유연성</span>
+        <span class="tag">심폐지구력</span>
+        <span class="tag">순발력</span>
+      </div>
+    </div>
+    <div class="hero-mascot">
+      <svg class="mascot bob" width="190" height="190" aria-label="아령을 든 마스코트">
+        <use href="#workout"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+
+<section id="download" class="wrap">
+  <div class="section-label">DOWNLOAD</div>
+  <h2>받아서 바로 써 보세요</h2>
+  <p class="lede">
+    안드로이드 폰이 없어도 됩니다. 설치 파일이 에뮬레이터까지 알아서 깔아 줍니다.
+    운영체제에 맞는 것을 고르세요.
+  </p>
+
+  <div class="grid grid-3">
+    <div class="card dl">
+      <div class="dl-top">
+        <svg class="mascot" width="58" height="58" aria-hidden="true"><use href="#happy"/></svg>
+        <div>
+          <h3>Windows</h3>
+          <div class="os">Windows 10 이상 · 64비트</div>
+        </div>
+      </div>
+      <p>에뮬레이터와 앱을 한 번에 설치합니다. 설치가 끝나면 앱이 저절로 열립니다.</p>
+      <a class="btn btn-primary" href="https://github.com/InhyeokKang/fitbalance/releases/latest/download/fitbalance-windows.zip">Windows용 받기</a>
+      <div class="meta">압축을 풀고 <code>설치.bat</code> 실행</div>
+    </div>
+
+    <div class="card dl">
+      <div class="dl-top">
+        <svg class="mascot" width="58" height="58" aria-hidden="true"><use href="#searching"/></svg>
+        <div>
+          <h3>macOS</h3>
+          <div class="os">Apple Silicon · Intel</div>
+        </div>
+      </div>
+      <p>맥에서도 같습니다. Apple Silicon은 에뮬레이터가 네이티브로 돌아 더 빠릅니다.</p>
+      <a class="btn btn-dark" href="https://github.com/InhyeokKang/fitbalance/releases/latest/download/fitbalance-mac.zip">macOS용 받기</a>
+      <div class="meta">압축을 풀고 <code>설치.command</code> 실행</div>
+    </div>
+
+    <div class="card dl">
+      <div class="dl-top">
+        <svg class="mascot" width="58" height="58" aria-hidden="true"><use href="#proud"/></svg>
+        <div>
+          <h3>APK만 받기</h3>
+          <div class="os">안드로이드 8.0 이상</div>
+        </div>
+      </div>
+      <p>안드로이드 폰이 있다면 이게 가장 빠릅니다. 폰에 옮겨 설치하세요.</p>
+      <a class="btn btn-ghost" href="https://github.com/InhyeokKang/fitbalance/releases/latest/download/fitbalance.apk">APK 받기</a>
+      <div class="meta">설치 후 설정에서 서버 주소를 넣어 주세요</div>
+    </div>
+  </div>
+
+  <div style="height:16px"></div>
+  <div class="note">
+    <svg class="mascot" width="52" height="52" style="flex:none" aria-hidden="true"><use href="#worried"/></svg>
+    <div>
+      <strong>서버가 켜져 있어야 동작합니다</strong>
+      진단 계산·강좌 추천·지역 검색이 서버에 있습니다. 설치 파일에 서버가 함께 들어 있고
+      설치가 끝나면 같이 켜집니다. 창을 닫으면 앱도 멈춥니다.
+    </div>
+  </div>
+</section>
+
+
+<section id="how" class="wrap">
+  <div class="section-label">HOW IT WORKS</div>
+  <h2>세 단계면 끝납니다</h2>
+  <p class="lede">
+    체력을 재고, 약한 곳을 찾고, 퇴근 동선 안에서 갈 만한 곳을 받습니다.
+  </p>
+
+  <div class="grid grid-3">
+    <div class="card step">
+      <div class="num">STEP 1</div>
+      <svg class="mascot bob" width="96" height="96" style="margin:0 auto" aria-hidden="true"><use href="#workout"/></svg>
+      <h3>집에서 3가지 재기</h3>
+      <p>교차윗몸일으키기·앉아윗몸앞으로굽히기·제자리멀리뛰기.<br>줄자와 초시계면 됩니다.</p>
+    </div>
+    <div class="card step">
+      <div class="num">STEP 2</div>
+      <svg class="mascot bob-fast" width="96" height="96" style="margin:0 auto" aria-hidden="true"><use href="#searching"/></svg>
+      <h3>또래와 비교</h3>
+      <p>국민체력100 실측 자료와 대조해<br>같은 성별·나이대 100명 중 몇 등인지 봅니다.</p>
+    </div>
+    <div class="card step">
+      <div class="num">STEP 3</div>
+      <svg class="mascot bob" width="96" height="96" style="margin:0 auto" aria-hidden="true"><use href="#proud"/></svg>
+      <h3>퇴근길에서 찾기</h3>
+      <p>직장과 집을 잇는 동선 안에서<br>약점에 맞는 강좌와 시설을 골라 줍니다.</p>
+    </div>
+  </div>
+
+  <div style="height:16px"></div>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:18px;letter-spacing:-.03em">트랙 1 · 집에서</h3>
+      <p style="margin:0;color:var(--muted);font-size:14px">
+        장비 없이 시작합니다. 추정이 아니라 실제 기준표와 대조하므로
+        결과가 센터 측정과 같은 방식으로 나옵니다. 잴 여건이 안 되면 6문항 자가진단도 있습니다.
+      </p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:18px;letter-spacing:-.03em">트랙 2 · 센터에서</h3>
+      <p style="margin:0;color:var(--muted);font-size:14px">
+        근력과 심폐지구력은 악력계와 20m 구간이 있어야 해서 집에서 못 잽니다.
+        전국 78개 체력인증센터에서 무료로 재고, 앱이 만든 요약을 가져가면 상담이 빨라집니다.
+      </p>
+    </div>
+  </div>
+</section>
+
+
+<section id="data" class="wrap">
+  <div class="section-label">PUBLIC DATA</div>
+  <h2>지어낸 숫자가 하나도 없습니다</h2>
+  <p class="lede">
+    기준표·시설·주소·좌표가 전부 공공데이터에서 왔습니다. 강좌 시간표만 사람이 모읍니다.
+  </p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="n">450</div>
+      <div class="l">체력 기준표 행</div>
+      <div class="s">성별 2 × 나이대 9 × 항목 5 × 백분위 5<br>국민체력100 측정결과 2022~2026</div>
+    </div>
+    <div class="stat">
+      <div class="n">34,727</div>
+      <div class="l">전국 공공체육시설</div>
+      <div class="s">공공데이터포털 15107764<br>이 중 강습 가능 5,804곳</div>
+    </div>
+    <div class="stat">
+      <div class="n">2,159</div>
+      <div class="l">지역 색인</div>
+      <div class="s">전국 16개 시도<br>동 단위까지 검색</div>
+    </div>
+    <div class="stat">
+      <div class="n">78</div>
+      <div class="l">체력인증센터</div>
+      <div class="s">전국·무료<br>만 13세 이상 누구나</div>
+    </div>
+  </div>
+
+  <div style="height:16px"></div>
+  <div class="note">
+    <svg class="mascot" width="52" height="52" style="flex:none" aria-hidden="true"><use href="#searching"/></svg>
+    <div>
+      <strong>강좌 시간표는 공공데이터에 없습니다</strong>
+      전국 단위로 강좌 시간표를 제공하는 데이터셋이 없다는 것을 확인했습니다.
+      그래서 시설명·주소·좌표·종목은 공공데이터로 채우고, 요일과 시작 시각만 직접 수집합니다.
+    </div>
+  </div>
+</section>
+
+
+<section id="team" class="wrap">
+  <div class="section-label">TEAM</div>
+  <h2>관광·체육 공공데이터 공모전 출품작</h2>
+  <p class="lede">
+    직장인의 신체 불균형을 국민체력100 기준으로 진단하고,
+    퇴근 동선 안의 공공 체육 자원으로 잇는 것을 목표로 만들었습니다.
+  </p>
+
+  <div class="grid grid-2">
+    <div class="card" style="display:flex;gap:18px;align-items:center">
+      <svg class="mascot bob" width="76" height="76" style="flex:none" aria-hidden="true"><use href="#happy"/></svg>
+      <div>
+        <h3 style="margin:0 0 6px;font-size:17px;letter-spacing:-.03em">만든 것</h3>
+        <p style="margin:0;color:var(--muted);font-size:14px">
+          안드로이드 앱(Kotlin · Jetpack Compose)과 추천 서버(FastAPI · SQLite).
+          지도는 카카오맵 SDK를 씁니다.
+        </p>
+      </div>
+    </div>
+    <div class="card" style="display:flex;gap:18px;align-items:center">
+      <svg class="mascot bob-fast" width="76" height="76" style="flex:none" aria-hidden="true"><use href="#workout"/></svg>
+      <div>
+        <h3 style="margin:0 0 6px;font-size:17px;letter-spacing:-.03em">소스와 문서</h3>
+        <p style="margin:0;color:var(--muted);font-size:14px">
+          데이터 수집 스크립트부터 검증 문서까지 저장소에 열려 있습니다.
+        </p>
+        <a class="btn btn-ghost" style="margin-top:12px;padding:9px 16px;font-size:14px"
+           href="https://github.com/InhyeokKang/fitbalance">GitHub에서 보기</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<footer>
+  <div class="wrap">
+    <div>
+      <span class="wordmark"><b>fit</b><span>balance</span></span>
+      <div style="margin-top:6px">앉아서 일하는 몸을 위한 공공 체육 안내</div>
+    </div>
+    <div style="text-align:right">
+      <div>출처 · 국민체육진흥공단 국민체력100 측정결과</div>
+      <div>공공데이터포털 공공체육시설 상세 정보</div>
+      <div style="margin-top:6px"><a href="https://github.com/InhyeokKang/fitbalance">github.com/InhyeokKang/fitbalance</a></div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

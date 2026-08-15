@@ -39,28 +39,36 @@ class Prefs(context: Context) {
     var maxDistanceKm: Double
         get() = sp.getFloat("max_distance_km", 3.0f).toDouble()
         set(v) = sp.edit().putFloat("max_distance_km", v.toFloat()).apply()
+
+    /**
+     * 화면에 보여 줄 위치 이름. 좌표만으로는 어디를 골랐는지 알 수 없다.
+     * 비어 있으면 아직 고르지 않은 것이다.
+     */
+    var workLabel: String
+        get() = sp.getString("work_label", "") ?: ""
+        set(v) = sp.edit().putString("work_label", v).apply()
+
+    var homeLabel: String
+        get() = sp.getString("home_label", "") ?: ""
+        set(v) = sp.edit().putString("home_label", v).apply()
+
+    /** 첫 실행 안내를 이미 봤는지. 한 번 본 뒤에는 재시작해도 다시 뜨지 않는다. */
+    var tutorialDone: Boolean
+        get() = sp.getBoolean("tutorial_done", false)
+        set(v) = sp.edit().putBoolean("tutorial_done", v).apply()
+
+    /** 첫 실행 때 위치·시각을 받아 두었는지. */
+    var onboardingDone: Boolean
+        get() = sp.getBoolean("onboarding_done", false)
+        set(v) = sp.edit().putBoolean("onboarding_done", v).apply()
+
+    /**
+     * 사용자가 직접 지정한 서버 주소. 비어 있으면 빌드에 박힌 기본값을 쓴다.
+     *
+     * APK만 받아 자기 폰에 깐 사람은 기본값(에뮬레이터용 10.0.2.2)으로 못 붙는다.
+     * 같은 와이파이의 노트북 주소나 배포한 서버 주소를 여기에 넣는다.
+     */
+    var serverUrl: String
+        get() = sp.getString("server_url", "") ?: ""
+        set(v) = sp.edit().putString("server_url", v.trim()).apply()
 }
-
-/**
- * 설정 화면에서 고를 수 있는 위치 프리셋.
- * 지도 화면이 이번 범위 밖이라 좌표 대신 지역을 골라 쓴다.
- * 좌표는 내부 계산용이고, 화면에는 [address]만 보여준다.
- */
-data class PlacePreset(
-    val name: String,
-    val address: String,
-    /** 체력인증센터를 이 지역부터 보여주기 위해 쓴다. */
-    val sido: String,
-    val lat: Double,
-    val lng: Double,
-)
-
-val PLACE_PRESETS = listOf(
-    PlacePreset("시청·광화문", "서울특별시 중구 세종대로 일대", "서울", 37.5665, 126.9780),
-    PlacePreset("강남역", "서울특별시 강남구 강남대로 일대", "서울", 37.4979, 127.0276),
-    PlacePreset("여의도", "서울특별시 영등포구 여의도동 일대", "서울", 37.5219, 126.9245),
-    PlacePreset("판교", "경기도 성남시 분당구 판교역로 일대", "경기", 37.3947, 127.1112),
-    PlacePreset("홍대·마포", "서울특별시 마포구 양화로 일대", "서울", 37.5563, 126.9236),
-    PlacePreset("잠실", "서울특별시 송파구 올림픽로 일대", "서울", 37.5133, 127.1000),
-    PlacePreset("성수·왕십리", "서울특별시 성동구 왕십리로 일대", "서울", 37.5445, 127.0557),
-)

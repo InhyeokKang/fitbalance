@@ -56,6 +56,21 @@ ITEM_TO_FACTOR = {
     "standing_jump": "power",
 }
 
+# 지역 목록을 낼 때 쓰는 시도 순서. 인구가 많은 곳을 앞에 둔다.
+# 검색어 없이 열었을 때 보여 줄 순서이므로 사용자가 찾을 확률이 높은 쪽이 위여야 한다.
+# 광주·전남은 전남광주통합특별시로 하나다.
+SIDO_ORDER = [
+    "서울", "경기", "부산", "인천", "대구", "대전", "전남광주", "울산",
+    "충남", "충북", "전북", "경남", "경북", "강원", "제주", "세종",
+]
+
+# 집에서 잴 수 없는 항목과 그 이유. 앱이 "왜 센터에 가야 하는지"를 이 문구로 설명한다.
+CENTER_ONLY_ITEMS = ["grip", "shuttle_run"]
+CENTER_ONLY_REASON = {
+    "grip": "악력계가 있어야 합니다",
+    "shuttle_run": "20m 직선 구간과 신호음이 있어야 합니다",
+}
+
 # 약점 요인 조합(2개) -> 불균형 유형명과 설명. 5개 요인이므로 10가지 조합이 나온다.
 IMBALANCE_TYPES = {
     frozenset(["strength", "endurance"]): (
@@ -138,9 +153,19 @@ def load_csv_to_sqlite() -> tuple[int, int]:
         CREATE TABLE facility_addresses (
             facility TEXT PRIMARY KEY, address TEXT
         );
+        DROP TABLE IF EXISTS places;
+        CREATE TABLE places (
+            sido TEXT, sigungu TEXT, dong TEXT, lat REAL, lng REAL, facility_count INTEGER
+        );
+        DROP TABLE IF EXISTS facilities;
+        CREATE TABLE facilities (
+            facility TEXT PRIMARY KEY, lat REAL, lng REAL, sport TEXT,
+            tag_strength INTEGER, tag_endurance INTEGER, tag_flex INTEGER,
+            tag_cardio INTEGER, tag_power INTEGER
+        );
         CREATE TABLE IF NOT EXISTS diagnoses (
             diagnosis_id TEXT PRIMARY KEY, device_id TEXT, measured_at TEXT,
-            gender TEXT, age_band TEXT, payload TEXT
+            gender TEXT, age_band TEXT, payload TEXT, profile TEXT DEFAULT 'improve'
         );
         CREATE TABLE IF NOT EXISTS match_fail_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT, logged_at TEXT,
@@ -148,6 +173,10 @@ def load_csv_to_sqlite() -> tuple[int, int]:
         );
         """
     )
+
+    # diagnoses 는 사용자 기록이라 지우지 않는다. 이전 버전 DB에는 profile 열이 없다.
+    if "profile" not in {c[1] for c in cur.execute("PRAGMA table_info(diagnoses)")}:
+        cur.execute("ALTER TABLE diagnoses ADD COLUMN profile TEXT DEFAULT 'improve'")
 
     norms_path = DATA_DIR / "norms.csv"
     courses_path = DATA_DIR / "courses.csv"
@@ -204,6 +233,35 @@ def load_csv_to_sqlite() -> tuple[int, int]:
         missing = {c[2] for c in course_rows} - {a[0] for a in address_rows}
         if missing:
             print(f"[주소 없음] {len(missing)}개 시설: {', '.join(sorted(missing))}")
+
+    # 지역 색인. 주소 입력창의 검색 대상이다. 없으면 검색이 빈 결과를 준다.
+    places_path = DATA_DIR / "places.csv"
+    if places_path.exists():
+        with open(places_path, encoding="utf-8-sig", newline="") as f:
+            place_rows = [
+                (r["sido"], r["sigungu"], r["dong"], float(r["lat"]), float(r["lng"]),
+                 int(r["facility_count"]))
+                for r in csv.DictReader(f)
+            ]
+        cur.executemany("INSERT INTO places VALUES (?,?,?,?,?,?)", place_rows)
+
+    # 공공체육시설 목록(공공데이터포털 15107764에서 받아 만든 시드).
+    # 강좌 시간표가 없는 시설도 담는다. "강좌 말고 그냥 이용할 곳"을 안내하는 데 쓴다.
+    seed_path = DATA_DIR / "courses_seed.csv"
+    if seed_path.exists():
+        with open(seed_path, encoding="utf-8-sig", newline="") as f:
+            facility_rows = []
+            for r in csv.DictReader(f):
+                try:
+                    lat, lng = float(r["lat"]), float(r["lng"])
+                except (ValueError, KeyError):
+                    continue
+                facility_rows.append((
+                    r["facility"], lat, lng, r["sport"],
+                    int(r["tag_strength"]), int(r["tag_endurance"]), int(r["tag_flex"]),
+                    int(r["tag_cardio"]), int(r["tag_power"]),
+                ))
+        cur.executemany("INSERT OR REPLACE INTO facilities VALUES (?,?,?,?,?,?,?,?,?)", facility_rows)
 
     # 체력인증센터 목록. 없어도 서버는 뜬다(그 화면만 비어 보인다).
     centers_path = DATA_DIR / "centers.csv"
@@ -347,9 +405,53 @@ def parse_hhmm(text: str) -> int:
         raise HTTPException(status_code=422, detail=f"시각 형식이 잘못되었습니다: {text} (HH:MM)")
 
 
+def score_items(
+    conn: sqlite3.Connection, gender: str, band: str, raw_values: dict[str, float]
+) -> tuple[list[dict], dict[str, float]]:
+    """측정값을 기준표와 대조해 항목별 점수와 요인별 백분위를 낸다.
+
+    정밀 진단(5항목)과 집 측정(3항목)이 같은 계산을 쓰도록 떼어 놓았다.
+    """
+    items = []
+    factor_pct = {}
+    for item, value in raw_values.items():
+        label, unit, lo, hi = ITEM_META[item]
+        if not (lo <= value <= hi):
+            raise HTTPException(
+                status_code=422,
+                detail=f"{label} 값이 허용 범위({lo}~{hi}{unit})를 벗어났습니다: {value}",
+            )
+        p = percentile_of(conn, gender, band, item, value)
+        # 항목 하나가 요인 하나에 대응한다(공단 분류와 동일).
+        factor_pct[ITEM_TO_FACTOR[item]] = p
+        items.append({
+            "item": item, "label": label, "value": value, "unit": unit,
+            "percentile": round(p), "grade": grade_of(p),
+        })
+    return items, factor_pct
+
+
+# 모든 요인이 이 백분위 이상이면 보완이 아니라 유지가 목표다.
+# grade_of 에서 "양호"가 시작되는 지점과 같은 값을 쓴다.
+MAINTAIN_THRESHOLD = 60.0
+
+
+def profile_of(factor_pct: dict[str, float]) -> str:
+    """
+    추천의 목표를 정한다.
+
+    'improve'  약한 요인을 끌어올리는 강좌를 우선한다
+    'maintain' 이미 다 양호하다. 가장 낮은 요인도 또래 상위권이므로 그것을
+               '약점'이라 부르면 사실이 아니다. 지금 수준을 이어 갈 곳을 찾는다.
+    """
+    return "maintain" if all(v >= MAINTAIN_THRESHOLD for v in factor_pct.values()) else "improve"
+
+
 def imbalance_of(weak: list[str], factor_pct: dict[str, float]) -> tuple[str, str]:
     if all(v >= 60 for v in factor_pct.values()):
-        return "균형 양호형", "다섯 가지 체력요인이 모두 평균 이상입니다. 현재 활동량을 유지하세요."
+        # 집 측정은 3개 요인만 잰다. 잰 개수를 그대로 말한다.
+        n = len(factor_pct)
+        return "균형 양호형", f"측정한 {n}가지 체력요인이 모두 또래 상위권입니다. 현재 활동량을 유지하세요."
     found = IMBALANCE_TYPES.get(frozenset(weak))
     if found:
         return found
@@ -370,6 +472,26 @@ class DiagnoseRequest(BaseModel):
     sit_up: int = Field(ge=0, le=100)
     sit_reach_cm: float = Field(ge=-30, le=40)
     shuttle_run: int = Field(ge=0, le=120)
+    standing_jump_cm: float = Field(ge=30, le=350)
+
+
+class HomeDiagnoseRequest(BaseModel):
+    """
+    집에서 직접 잴 수 있는 항목만 받는다.
+
+    공단 성인기 측정항목 5개 중 3개다. 나머지 둘은 집에서 잴 방법이 없다.
+      - 상대악력       : 악력계가 있어야 한다
+      - 왕복오래달리기 : 20m 직선 구간과 신호음이 있어야 한다
+    이 둘은 체력인증센터에서 무료로 잰다. 추정치로 메우지 않고 미측정으로 남긴다.
+    """
+
+    device_id: str
+    gender: Literal["M", "F"]
+    age: int = Field(ge=19, le=64)
+    height_cm: float = Field(ge=100, le=250)
+    weight_kg: float = Field(ge=30, le=200)
+    sit_up: int = Field(ge=0, le=100)
+    sit_reach_cm: float = Field(ge=-30, le=40)
     standing_jump_cm: float = Field(ge=30, le=350)
 
 
@@ -447,21 +569,7 @@ def diagnose(req: DiagnoseRequest):
             "standing_jump": req.standing_jump_cm,
         }
 
-        items = []
-        pct = {}
-        for item, value in raw_values.items():
-            label, unit, lo, hi = ITEM_META[item]
-            if not (lo <= value <= hi):
-                raise HTTPException(status_code=422, detail=f"{label} 값이 허용 범위({lo}~{hi}{unit})를 벗어났습니다: {value}")
-            p = percentile_of(conn, req.gender, band, item, value)
-            pct[item] = p
-            items.append({
-                "item": item, "label": label, "value": value, "unit": unit,
-                "percentile": round(p), "grade": grade_of(p),
-            })
-
-        # 항목 하나가 요인 하나에 대응한다(공단 분류와 동일).
-        factor_pct = {ITEM_TO_FACTOR[item]: p for item, p in pct.items()}
+        items, factor_pct = score_items(conn, req.gender, band, raw_values)
         factors = [
             {
                 "factor": f, "label": FACTOR_LABEL[f],
@@ -472,6 +580,7 @@ def diagnose(req: DiagnoseRequest):
         weak = [f for f, _ in sorted(factor_pct.items(), key=lambda kv: kv[1])[:2]]
         type_name, type_desc = imbalance_of(weak, factor_pct)
         cat, in_range = bmi_category(bmi)
+        profile = profile_of(factor_pct)
 
         now = datetime.now(KST)
         diagnosis_id = f"d_{now:%Y%m%d}_{uuid.uuid4().hex[:8]}"
@@ -482,6 +591,7 @@ def diagnose(req: DiagnoseRequest):
             "age_band_label": band_label(band),
             "gender": req.gender,
             "estimated": False,
+            "profile": profile,
             "total_score": round(sum(factor_pct.values()) / len(FACTOR_ORDER)),
             "imbalance_type": type_name,
             "imbalance_desc": type_desc,
@@ -492,8 +602,89 @@ def diagnose(req: DiagnoseRequest):
         }
 
         conn.execute(
-            "INSERT INTO diagnoses VALUES (?,?,?,?,?,?)",
-            (diagnosis_id, req.device_id, now.isoformat(), req.gender, band, ",".join(weak)),
+            "INSERT INTO diagnoses VALUES (?,?,?,?,?,?,?)",
+            (diagnosis_id, req.device_id, now.isoformat(), req.gender, band,
+             ",".join(weak), profile),
+        )
+        conn.commit()
+        return result
+    finally:
+        conn.close()
+
+
+@app.post("/api/v1/diagnose/home")
+def diagnose_home(req: HomeDiagnoseRequest):
+    """
+    집에서 잰 3항목으로 진단한다.
+
+    정밀 진단과 계산 방식이 같다. 국민체력100 기준표와 실제로 대조하므로
+    추정치가 아니다(estimated=False). 다만 근력·심폐지구력은 잴 수 없어
+    미측정으로 남고, 그 자리가 센터 방문의 이유가 된다.
+    """
+    conn = _connect()
+    try:
+        band = age_to_band(req.age)
+        height_m = req.height_cm / 100.0
+        bmi = round(req.weight_kg / (height_m * height_m), 1)
+
+        raw_values = {
+            "sit_up": float(req.sit_up),
+            "sit_reach": req.sit_reach_cm,
+            "standing_jump": req.standing_jump_cm,
+        }
+        items, factor_pct = score_items(conn, req.gender, band, raw_values)
+
+        # 잰 요인만 담는다. 미측정 요인을 0으로 채우면 약점이 왜곡된다.
+        measured = [f for f in FACTOR_ORDER if f in factor_pct]
+        factors = [
+            {
+                "factor": f, "label": FACTOR_LABEL[f],
+                "percentile": round(factor_pct[f]), "grade": grade_of(factor_pct[f]),
+            }
+            for f in measured
+        ]
+        weak = [f for f, _ in sorted(factor_pct.items(), key=lambda kv: kv[1])[:2]]
+        type_name, type_desc = imbalance_of(weak, factor_pct)
+        cat, in_range = bmi_category(bmi)
+        profile = profile_of(factor_pct)
+
+        unmeasured = [
+            {
+                "factor": ITEM_TO_FACTOR[item],
+                "label": FACTOR_LABEL[ITEM_TO_FACTOR[item]],
+                "item": ITEM_META[item][0],
+                "reason": CENTER_ONLY_REASON[item],
+            }
+            for item in CENTER_ONLY_ITEMS
+        ]
+        missing = "·".join(u["label"] for u in unmeasured)
+
+        now = datetime.now(KST)
+        diagnosis_id = f"h_{now:%Y%m%d}_{uuid.uuid4().hex[:8]}"
+        result = {
+            "diagnosis_id": diagnosis_id,
+            "measured_at": now.isoformat(timespec="seconds"),
+            "age_band": band,
+            "age_band_label": band_label(band),
+            "gender": req.gender,
+            "estimated": False,
+            "profile": profile,
+            "notice": f"집에서 잴 수 있는 3가지로 진단했습니다. "
+                      f"{missing}은 체력인증센터에서 무료로 잴 수 있습니다.",
+            "total_score": round(sum(factor_pct.values()) / len(factor_pct)),
+            "imbalance_type": type_name,
+            "imbalance_desc": type_desc,
+            "factors": factors,
+            "weak_factors": weak,
+            "unmeasured_factors": unmeasured,
+            "items": items,
+            "bmi": {"value": bmi, "category": cat, "in_normal_range": in_range},
+        }
+
+        conn.execute(
+            "INSERT INTO diagnoses VALUES (?,?,?,?,?,?,?)",
+            (diagnosis_id, req.device_id, now.isoformat(), req.gender, band,
+             ",".join(weak), profile),
         )
         conn.commit()
         return result
@@ -537,6 +728,7 @@ def selfcheck(req: SelfCheckRequest):
     ]
     weak = [f for f, _ in sorted(factor_pct.items(), key=lambda kv: kv[1])[:2]]
     type_name, type_desc = imbalance_of(weak, factor_pct)
+    profile = profile_of(factor_pct)
 
     now = datetime.now(KST)
     diagnosis_id = f"s_{now:%Y%m%d}_{uuid.uuid4().hex[:8]}"
@@ -547,6 +739,7 @@ def selfcheck(req: SelfCheckRequest):
         "age_band_label": band_label(band),
         "gender": req.gender,
         "estimated": True,
+        "profile": profile,
         "notice": "설문으로 추정한 참고용 결과입니다. 정확한 진단은 무료 체력인증센터 측정을 권합니다.",
         "total_score": round(sum(factor_pct.values()) / len(FACTOR_ORDER)),
         "imbalance_type": type_name,
@@ -560,8 +753,9 @@ def selfcheck(req: SelfCheckRequest):
     conn = _connect()
     try:
         conn.execute(
-            "INSERT INTO diagnoses VALUES (?,?,?,?,?,?)",
-            (diagnosis_id, req.device_id, now.isoformat(), req.gender, band, ",".join(weak)),
+            "INSERT INTO diagnoses VALUES (?,?,?,?,?,?,?)",
+            (diagnosis_id, req.device_id, now.isoformat(), req.gender, band,
+             ",".join(weak), profile),
         )
         conn.commit()
     finally:
@@ -599,8 +793,13 @@ def centers(
     items = [to_dict(r) for r in rows]
     nearby: list[dict] = []
     if sido:
-        nearby = [c for c in items if c["sido"] == sido]
-        items = nearby + [c for c in items if c["sido"] != sido]
+        # 센터 목록은 "서울", 주소 색인은 "서울특별시"로 쓴다. 어느 쪽이 와도 맞도록
+        # 서로 포함 관계만 본다. ("전남광주"와 "전남광주통합특별시"도 이렇게 맞는다)
+        def same(a: str, b: str) -> bool:
+            return a.startswith(b) or b.startswith(a)
+
+        nearby = [c for c in items if same(c["sido"], sido)]
+        items = nearby + [c for c in items if not same(c["sido"], sido)]
 
     return {
         "total": len(items),
@@ -629,13 +828,15 @@ def recommend(req: RecommendRequest):
     conn = _connect()
     try:
         weak = req.weak_factors
+        profile = "improve"
         if req.diagnosis_id:
             row = conn.execute(
-                "SELECT payload FROM diagnoses WHERE diagnosis_id=?", (req.diagnosis_id,)
+                "SELECT payload, profile FROM diagnoses WHERE diagnosis_id=?", (req.diagnosis_id,)
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail=f"진단 결과를 찾을 수 없습니다: {req.diagnosis_id}")
             weak = row["payload"].split(",")
+            profile = row["profile"] or "improve"
         if not weak:
             raise HTTPException(status_code=422, detail="diagnosis_id 또는 weak_factors 중 하나는 있어야 합니다")
         bad = [f for f in weak if f not in FACTOR_LABEL]
@@ -643,8 +844,14 @@ def recommend(req: RecommendRequest):
             raise HTTPException(status_code=422, detail=f"알 수 없는 체력요인: {bad}")
 
         leave_min = parse_hhmm(req.leave_time)
-        # 약점 요인은 부족도 1.0, 나머지는 0.3으로 두어 약점 대응 강좌가 상위에 오게 한다
-        user_vec = [1.0 if f in weak else 0.3 for f in FACTOR_ORDER]
+        maintain = profile == "maintain"
+        if maintain:
+            # 이미 다 양호하다. 특정 요인만 파고들 이유가 없으므로 모든 요인을 같게 두고,
+            # 여러 요인을 함께 쓰는 강좌가 위로 오게 한다(한쪽만 계속 쓰면 균형이 깨진다).
+            user_vec = [1.0 for _ in FACTOR_ORDER]
+        else:
+            # 약점 요인은 부족도 1.0, 나머지는 0.3으로 두어 약점 대응 강좌가 상위에 오게 한다
+            user_vec = [1.0 if f in weak else 0.3 for f in FACTOR_ORDER]
 
         scored = []
         for r in conn.execute("SELECT c.*, fa.address AS address FROM courses c LEFT JOIN facility_addresses fa ON fa.facility = c.facility").fetchall():
@@ -669,11 +876,20 @@ def recommend(req: RecommendRequest):
             time_fit = 1.0 if is_weekend or 30 <= gap <= 120 else 0.5
             score = 0.7 * sim + 0.2 * prox + 0.1 * time_fit
 
-            hit = [FACTOR_LABEL[f] for f in weak if r[f"tag_{f}"] == 1]
-            if hit:
-                reason = f"{'·'.join(hit)} 강화 강좌이며 퇴근 동선에서 {dist:.1f}km"
+            if maintain:
+                covered = [FACTOR_LABEL[f] for f in FACTOR_ORDER if r[f"tag_{f}"] == 1]
+                reason = (
+                    f"{'·'.join(covered)}을 함께 쓰는 강좌이며 퇴근 동선에서 {dist:.1f}km"
+                    if len(covered) >= 2
+                    else f"퇴근 동선에서 {dist:.1f}km, 지금 수준을 이어 가기 좋은 {r['sport']}"
+                )
             else:
-                reason = f"퇴근 동선에서 {dist:.1f}km, {r['sport']} 종목"
+                hit = [FACTOR_LABEL[f] for f in weak if r[f"tag_{f}"] == 1]
+                reason = (
+                    f"{'·'.join(hit)} 강화 강좌이며 퇴근 동선에서 {dist:.1f}km"
+                    if hit
+                    else f"퇴근 동선에서 {dist:.1f}km, {r['sport']} 종목"
+                )
 
             item = _course_dict(r)
             item.update({"distance_km": round(dist, 1), "score": round(score, 2), "match_reason": reason})
@@ -688,6 +904,13 @@ def recommend(req: RecommendRequest):
                 "leave_time": req.leave_time,
                 "max_distance_km": req.max_distance_km,
             },
+            "profile": profile,
+            "profile_notice": (
+                "모든 요인이 또래 상위권입니다. 보완할 곳을 찾기보다 "
+                "지금 수준을 이어 갈 수 있는 곳을 골랐습니다."
+                if maintain
+                else None
+            ),
             "total": len(top),
             "items": top,
         }
@@ -703,6 +926,169 @@ def recommend(req: RecommendRequest):
             )
             conn.commit()
         return response
+    finally:
+        conn.close()
+
+
+def _place_dict(r: sqlite3.Row) -> dict:
+    parts = [r["sido"], r["sigungu"]] + ([r["dong"]] if r["dong"] else [])
+    return {
+        "label": " ".join(parts),
+        "sido": r["sido"],
+        "sigungu": r["sigungu"],
+        "dong": r["dong"] or None,
+        "lat": r["lat"],
+        "lng": r["lng"],
+    }
+
+
+@app.get("/api/v1/places")
+def search_places(
+    q: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=12, ge=1, le=30),
+):
+    """
+    집·직장 위치를 찾기 위한 지역 검색.
+
+    가로 스크롤 칩으로는 전국을 담을 수 없어 입력 검색으로 바꿨다.
+    검색 대상은 공공체육시설 주소에서 뽑은 지역 색인(data/places.csv)이라
+    별도 인증키 없이 전국이 나온다. 동 단위까지 찾으며, 동선 추천은 km 단위라
+    이 정도 정밀도면 충분하다.
+
+    q가 없으면 시도별 대표 지역을 돌려준다. 빈 검색창만 두면 무엇을 쳐야 할지
+    모르는 사용자가 막히기 때문이다.
+    """
+    conn = _connect()
+    try:
+        terms = [t for t in (q or "").split() if t]
+
+        if not terms:
+            # 시도마다 시설이 가장 많은 시군구를 하나씩, 인구가 많은 시도 순으로 낸다.
+            # 시설 수로만 줄 세우면 "상주시, 밀양시"가 앞에 와서 아무도 안 누른다.
+            picked = []
+            for sido in SIDO_ORDER:
+                row = conn.execute(
+                    "SELECT * FROM places WHERE sido LIKE ?"
+                    " ORDER BY facility_count DESC LIMIT 1",
+                    (f"{sido}%",),
+                ).fetchone()
+                if row is not None:
+                    picked.append(_place_dict(row))
+                if len(picked) >= limit:
+                    break
+            return {"query": "", "total": len(picked), "items": picked}
+
+        # 공백으로 나눠 모두 포함하는 곳을 찾는다. "부산 전포동"처럼 띄어 써도 된다.
+        sql = "SELECT * FROM places WHERE 1=1"
+        params: list = []
+        for t in terms:
+            sql += " AND (sido LIKE ? OR sigungu LIKE ? OR dong LIKE ?)"
+            params += [f"%{t}%"] * 3
+        # 시설이 많은 동네를 앞에 둔다. 이름이 짧을수록 사용자가 찾던 곳일 확률이 높다.
+        sql += " ORDER BY facility_count DESC, LENGTH(sigungu) + LENGTH(dong) ASC LIMIT ?"
+        params.append(limit)
+
+        rows = conn.execute(sql, params).fetchall()
+        return {"query": q, "total": len(rows), "items": [_place_dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@app.post("/api/v1/facilities")
+def recommend_facilities(req: RecommendRequest):
+    """
+    퇴근 동선 주변의 공공체육시설을 고른다.
+
+    강좌를 들을 필요가 없는 사람(이미 다 양호하거나, 정해진 시간표에 매이기 싫은
+    사람)에게는 '언제든 가서 쓸 수 있는 곳'이 답이다. 강좌와 달리 요일·시각
+    제약이 없으므로 거리와 종목만으로 고른다.
+
+    출처: 공공데이터포털 공공체육시설 상세 정보(15107764).
+    """
+    conn = _connect()
+    try:
+        weak = req.weak_factors or []
+        profile = "improve"
+        if req.diagnosis_id:
+            row = conn.execute(
+                "SELECT payload, profile FROM diagnoses WHERE diagnosis_id=?", (req.diagnosis_id,)
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"진단 결과를 찾을 수 없습니다: {req.diagnosis_id}")
+            weak = row["payload"].split(",")
+            profile = row["profile"] or "improve"
+        bad = [f for f in weak if f not in FACTOR_LABEL]
+        if bad:
+            raise HTTPException(status_code=422, detail=f"알 수 없는 체력요인: {bad}")
+
+        maintain = profile == "maintain" or not weak
+        user_vec = (
+            [1.0 for _ in FACTOR_ORDER] if maintain
+            else [1.0 if f in weak else 0.3 for f in FACTOR_ORDER]
+        )
+
+        scored = []
+        sql = ("SELECT f.*, fa.address AS address FROM facilities f "
+               "LEFT JOIN facility_addresses fa ON fa.facility = f.facility")
+        for r in conn.execute(sql).fetchall():
+            dist = distance_to_route_km(
+                r["lat"], r["lng"], req.work_lat, req.work_lng, req.home_lat, req.home_lng
+            )
+            if dist > req.max_distance_km:
+                continue
+
+            vec = [float(r[f"tag_{f}"]) for f in FACTOR_ORDER]
+            if sum(vec) == 0:
+                continue
+            sim = cosine(user_vec, vec)
+            prox = 1 - min(dist / req.max_distance_km, 1.0)
+            # 시간표가 없으니 시간 적합도 항이 빠진다. 그만큼 거리를 더 본다.
+            score = 0.6 * sim + 0.4 * prox
+
+            covered = [FACTOR_LABEL[f] for f in FACTOR_ORDER if r[f"tag_{f}"] == 1]
+            if maintain:
+                reason = f"퇴근 동선에서 {dist:.1f}km, {'·'.join(covered)} 유지에 좋습니다"
+            else:
+                hit = [FACTOR_LABEL[f] for f in weak if r[f"tag_{f}"] == 1]
+                reason = (
+                    f"{'·'.join(hit)}을 쓰는 시설이며 퇴근 동선에서 {dist:.1f}km"
+                    if hit else f"퇴근 동선에서 {dist:.1f}km"
+                )
+
+            scored.append({
+                "facility": r["facility"],
+                "address": r["address"] or None,
+                "sport": r["sport"],
+                "lat": r["lat"], "lng": r["lng"],
+                "tags": {f: r[f"tag_{f}"] for f in FACTOR_ORDER},
+                "distance_km": round(dist, 1),
+                "score": round(score, 2),
+                "match_reason": reason,
+            })
+
+        # 같은 종목이 줄줄이 나오면 고를 이유가 없다. 종목당 2곳까지만 남긴다.
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        per_sport: dict[str, int] = {}
+        picked = []
+        for s in scored:
+            n = per_sport.get(s["sport"], 0)
+            if n >= 2:
+                continue
+            per_sport[s["sport"]] = n + 1
+            picked.append(s)
+            if len(picked) >= req.limit:
+                break
+
+        return {
+            "profile": profile,
+            "notice": (
+                "정해진 시간표 없이 언제든 이용할 수 있는 공공체육시설입니다. "
+                "이용 시간과 요금은 시설마다 다르니 방문 전에 확인하세요."
+            ),
+            "source": "공공데이터포털 공공체육시설 상세 정보",
+            "total": len(picked),
+            "items": picked,
+        }
     finally:
         conn.close()
 

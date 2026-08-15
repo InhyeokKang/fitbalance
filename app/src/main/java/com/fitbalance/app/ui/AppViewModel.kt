@@ -9,7 +9,8 @@ import com.fitbalance.app.data.CenterResponse
 import com.fitbalance.app.data.Course
 import com.fitbalance.app.data.DiagnoseRequest
 import com.fitbalance.app.data.DiagnoseResponse
-import com.fitbalance.app.data.PLACE_PRESETS
+import com.fitbalance.app.data.FacilityResponse
+import com.fitbalance.app.data.HomeDiagnoseRequest
 import com.fitbalance.app.data.Prefs
 import com.fitbalance.app.data.RecommendRequest
 import com.fitbalance.app.data.RecommendResponse
@@ -35,14 +36,46 @@ data class Settings(
     val workLng: Double,
     val homeLat: Double,
     val homeLng: Double,
+    /** 화면에 보여 줄 위치 이름. 좌표만으로는 어디인지 알 수 없다. */
+    val workLabel: String = "",
+    val homeLabel: String = "",
     val leaveTime: String,
     val maxDistanceKm: Double,
-)
+) {
+    /** 체력인증센터를 이 지역부터 보여주기 위해 쓴다. 이름 앞부분이 시도다. */
+    val workSido: String? get() = workLabel.split(" ").firstOrNull()?.takeIf { it.isNotBlank() }
+}
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = Prefs(app)
     val deviceId: String = prefs.deviceId
+
+    init {
+        // 저장된 주소가 있으면 먼저 적용한다. 첫 호출 전에 해야 한다.
+        ApiClient.setBaseUrl(prefs.serverUrl)
+    }
+
+    /** 설정 화면이 보여 줄, 지금 쓰는 서버 주소. */
+    val serverUrl: String get() = ApiClient.currentBaseUrl()
+
+    fun saveServerUrl(url: String) {
+        prefs.serverUrl = url
+        ApiClient.setBaseUrl(url)
+    }
+
+    /** 첫 실행 안내를 띄울지. 한 번 보고 나면 다시 뜨지 않는다. */
+    private val _showTutorial = MutableStateFlow(!prefs.tutorialDone)
+    val showTutorial: StateFlow<Boolean> = _showTutorial.asStateFlow()
+
+    /** 첫 실행 위치·시각 입력을 띄울지. */
+    private val _showOnboarding = MutableStateFlow(!prefs.onboardingDone)
+    val showOnboarding: StateFlow<Boolean> = _showOnboarding.asStateFlow()
+
+    fun finishTutorial() {
+        prefs.tutorialDone = true
+        _showTutorial.value = false
+    }
 
     private val _settings = MutableStateFlow(
         Settings(
@@ -50,6 +83,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             workLng = prefs.workLng,
             homeLat = prefs.homeLat,
             homeLng = prefs.homeLng,
+            workLabel = prefs.workLabel,
+            homeLabel = prefs.homeLabel,
             leaveTime = prefs.leaveTime,
             maxDistanceKm = prefs.maxDistanceKm,
         )
@@ -68,6 +103,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _centers = MutableStateFlow<UiState<CenterResponse>>(UiState.Idle)
     val centers: StateFlow<UiState<CenterResponse>> = _centers.asStateFlow()
 
+    private val _facilities = MutableStateFlow<UiState<FacilityResponse>>(UiState.Idle)
+    val facilities: StateFlow<UiState<FacilityResponse>> = _facilities.asStateFlow()
+
     /** 최근 진단 결과. 홈 화면 요약과 추천 요청에 쓴다. */
     val lastDiagnosis: DiagnoseResponse?
         get() = (_diagnosis.value as? UiState.Success)?.data
@@ -77,15 +115,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.workLng = s.workLng
         prefs.homeLat = s.homeLat
         prefs.homeLng = s.homeLng
+        prefs.workLabel = s.workLabel
+        prefs.homeLabel = s.homeLabel
         prefs.leaveTime = s.leaveTime
         prefs.maxDistanceKm = s.maxDistanceKm
         _settings.value = s
+    }
+
+    /** 첫 실행 위치·시각 입력을 마쳤을 때. 저장까지 함께 한다. */
+    fun finishOnboarding(s: Settings) {
+        saveSettings(s)
+        prefs.onboardingDone = true
+        _showOnboarding.value = false
     }
 
     fun diagnose(req: DiagnoseRequest) {
         _diagnosis.value = UiState.Loading
         viewModelScope.launch {
             _diagnosis.value = runCatchingApi { ApiClient.service.diagnose(req) }
+        }
+    }
+
+    /** 집에서 잰 3항목으로 진단한다. 기준표 대조는 정밀 진단과 같다. */
+    fun diagnoseHome(req: HomeDiagnoseRequest) {
+        _diagnosis.value = UiState.Loading
+        viewModelScope.launch {
+            _diagnosis.value = runCatchingApi { ApiClient.service.diagnoseHome(req) }
         }
     }
 
@@ -97,28 +152,69 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 진단 결과를 바탕으로 추천한다. */
     fun recommend() {
         val diag = lastDiagnosis
-        val s = _settings.value
+        requestRecommend(
+            diagnosisId = diag?.diagnosisId,
+            weakFactors = if (diag == null) listOf("flex", "power") else null,
+        )
+    }
+
+    /**
+     * 진단 없이 사용자가 직접 고른 약점으로 추천한다.
+     *
+     * 체력인증센터에서 측정하면 결과지에 항목별 등급이 이미 나오므로,
+     * 그 값을 앱에 다시 입력하게 하지 않고 약한 항목만 받아 바로 추천한다.
+     */
+    fun recommendFor(weakFactors: List<String>) {
+        requestRecommend(diagnosisId = null, weakFactors = weakFactors)
+    }
+
+    private fun requestRecommend(diagnosisId: String?, weakFactors: List<String>?) {
         _recommendation.value = UiState.Loading
         viewModelScope.launch {
             _recommendation.value = runCatchingApi {
-                ApiClient.service.recommend(
-                    RecommendRequest(
-                        deviceId = deviceId,
+                ApiClient.service.recommend(recommendBody(diagnosisId, weakFactors))
+            }
+        }
+    }
+
+    /**
+     * 강좌 대신 시설을 찾는다.
+     *
+     * 시간표에 매이기 싫은 사람과, 이미 체력이 다 양호해서 강좌가 필요 없는
+     * 사람에게는 '언제든 가서 쓸 수 있는 곳'이 답이다.
+     */
+    fun loadFacilities() {
+        val diag = lastDiagnosis
+        _facilities.value = UiState.Loading
+        viewModelScope.launch {
+            _facilities.value = runCatchingApi {
+                ApiClient.service.facilities(
+                    recommendBody(
                         diagnosisId = diag?.diagnosisId,
-                        weakFactors = if (diag == null) listOf("flex", "power") else null,
-                        workLat = s.workLat,
-                        workLng = s.workLng,
-                        homeLat = s.homeLat,
-                        homeLng = s.homeLng,
-                        leaveTime = s.leaveTime,
-                        maxDistanceKm = s.maxDistanceKm,
-                        limit = 10,
+                        weakFactors = if (diag == null) null else diag.weakFactors,
                     )
                 )
             }
         }
+    }
+
+    private fun recommendBody(diagnosisId: String?, weakFactors: List<String>?): RecommendRequest {
+        val s = _settings.value
+        return RecommendRequest(
+            deviceId = deviceId,
+            diagnosisId = diagnosisId,
+            weakFactors = weakFactors,
+            workLat = s.workLat,
+            workLng = s.workLng,
+            homeLat = s.homeLat,
+            homeLng = s.homeLng,
+            leaveTime = s.leaveTime,
+            maxDistanceKm = s.maxDistanceKm,
+            limit = 10,
+        )
     }
 
     fun loadCourse(courseId: String) {
@@ -145,11 +241,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun loadCenters() {
         _centers.value = UiState.Loading
         viewModelScope.launch {
-            val sido = PLACE_PRESETS.firstOrNull {
-                kotlin.math.abs(it.lat - _settings.value.workLat) < 0.0005 &&
-                    kotlin.math.abs(it.lng - _settings.value.workLng) < 0.0005
-            }?.sido
-            _centers.value = runCatchingApi { ApiClient.service.centers(sido) }
+            _centers.value = runCatchingApi {
+                ApiClient.service.centers(_settings.value.workSido)
+            }
         }
     }
 

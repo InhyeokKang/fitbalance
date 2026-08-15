@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  런처 아이콘 전경 - 마스코트.
+
+  앱 안의 마스코트를 그대로 옮기지 않고 줄였다. 런처에서는 48dp 남짓으로 그려지는데,
+  팔까지 넣으면 다리와 뭉쳐 문어처럼 보인다. 몸통·표정·다리만 남긴다.
+  적응형 아이콘은 원형으로 잘릴 수 있어 내용을 중앙 66 안에 둔다.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.88"
+        android:scaleY="0.88">
+
+        <!-- 다리 -->
+        <path
+            android:pathData="M47,72 L44,82"
+            android:strokeColor="#00D68F"
+            android:strokeWidth="6"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M61,72 L64,82"
+            android:strokeColor="#00D68F"
+            android:strokeWidth="6"
+            android:strokeLineCap="round" />
+
+        <!-- 몸통 -->
+        <path
+            android:pathData="M54,26 C68,26 79,37 79,52 C79,66 68,76 54,76 C40,76 29,66 29,52 C29,37 40,26 54,26 Z"
+            android:fillColor="#00D68F" />
+
+        <!-- 배 쪽 하이라이트 -->
+        <path
+            android:pathData="M54,60 m-14,0 a14,10 0 1,0 28,0 a14,10 0 1,0 -28,0 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.20" />
+
+        <!-- 볼 -->
+        <path
+            android:pathData="M37,55 m-4.6,0 a4.6,3.6 0 1,0 9.2,0 a4.6,3.6 0 1,0 -9.2,0 Z"
+            android:fillColor="#00A874"
+            android:fillAlpha="0.32" />
+        <path
+            android:pathData="M71,55 m-4.6,0 a4.6,3.6 0 1,0 9.2,0 a4.6,3.6 0 1,0 -9.2,0 Z"
+            android:fillColor="#00A874"
+            android:fillAlpha="0.32" />
+
+        <!-- 눈웃음 -->
+        <path
+            android:pathData="M40,49 Q45,42 50,49"
+            android:strokeColor="#0C1112"
+            android:strokeWidth="4"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M58,49 Q63,42 68,49"
+            android:strokeColor="#0C1112"
+            android:strokeWidth="4"
+            android:strokeLineCap="round" />
+
+        <!-- 입 -->
+        <path
+            android:pathData="M49,59 Q54,64 59,59"
+            android:strokeColor="#0C1112"
+            android:strokeWidth="3.4"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

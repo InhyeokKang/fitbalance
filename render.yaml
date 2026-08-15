@@ -1,0 +1,26 @@
+# Render 무료 배포 설정.
+#
+# 이 파일이 있으면 Render 대시보드에서 저장소를 연결하는 것만으로 배포된다
+# (Blueprint). 별도 설정 입력이 필요 없다.
+#
+# 왜 DB 설정이 없나
+#   서버가 뜰 때 data/*.csv 를 읽어 SQLite를 새로 만든다. 디스크에 남길 게 없어
+#   무료 플랜(디스크 없음)에서 그대로 돌아간다. 진단 기록은 재배포 때 사라지지만
+#   앱이 기기 로컬에 최근 결과를 들고 있어 화면은 그대로다.
+#
+# 무료 플랜의 한계
+#   15분 요청이 없으면 잠들고, 다음 요청이 깨우는 데 50초쯤 걸린다.
+#   심사 시연 직전에 한 번 열어 두면 된다.
+services:
+  - type: web
+    name: fitbalance-api
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r server/requirements.txt
+    # Render가 넣어 주는 $PORT 로 떠야 한다. 고정 포트면 헬스체크가 실패한다.
+    startCommand: uvicorn server.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"

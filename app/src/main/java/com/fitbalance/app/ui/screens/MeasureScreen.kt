@@ -75,6 +75,7 @@ private fun Double.fmt(): String =
 fun MeasureScreen(
     deviceId: String,
     onBack: () -> Unit,
+    onPickWeak: () -> Unit,
     onFindCenter: () -> Unit,
     onSubmit: (DiagnoseRequest) -> Unit,
 ) {
@@ -214,6 +215,9 @@ fun MeasureScreen(
             },
             enabled = allValid,
         )
+        // 다 채우기 부담스러운 사용자를 위한 탈출구. 결과지가 있으면 약점만 고르면 된다.
+        VSpace(9)
+        GhostButton("다 넣기 번거로워요 · 약한 항목만 고르기", onPickWeak)
         VSpace(9)
         GhostButton("측정값이 없어요 · 체력인증센터 찾기", onFindCenter)
         VSpace(9)
@@ -302,7 +306,7 @@ private fun ProgressRow(done: Int, total: Int) {
 
 /** 세그먼트 컨트롤. 두 값 선택에는 FilterChip보다 눈이 덜 피로하다. */
 @Composable
-private fun SegmentedGender(selected: String, onSelect: (String) -> Unit) {
+fun SegmentedGender(selected: String, onSelect: (String) -> Unit) {
     val trackColor = Color(0xFFEBEFEE)
     Row(
         Modifier

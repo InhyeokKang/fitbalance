@@ -18,6 +18,31 @@ data class DiagnoseRequest(
 )
 
 /**
+ * 집에서 직접 잰 3항목. 악력계와 20m 구간이 필요한 두 항목은 빠져 있다.
+ * 응답은 정밀 진단과 같은 형태이며, 못 잰 요인은 unmeasuredFactors로 온다.
+ */
+data class HomeDiagnoseRequest(
+    @SerializedName("device_id") val deviceId: String,
+    val gender: String,
+    val age: Int,
+    @SerializedName("height_cm") val heightCm: Double,
+    @SerializedName("weight_kg") val weightKg: Double,
+    @SerializedName("sit_up") val sitUp: Int,
+    @SerializedName("sit_reach_cm") val sitReachCm: Double,
+    @SerializedName("standing_jump_cm") val standingJumpCm: Double,
+)
+
+/** 집에서는 잴 수 없어 센터로 넘긴 요인. */
+data class UnmeasuredFactor(
+    val factor: String,
+    val label: String,
+    /** 그 요인을 재는 공단 측정항목 이름. */
+    val item: String,
+    /** 집에서 왜 못 재는지. */
+    val reason: String,
+)
+
+/**
  * 도구 없이 답하는 간편 자가진단. 각 문항 0~3점이며 클수록 좋다.
  * 결과는 기준표와 대조한 값이 아니라 추정치다.
  */
@@ -63,6 +88,8 @@ data class DiagnoseResponse(
     val gender: String,
     /** 간편 자가진단으로 얻은 추정치이면 true. 화면에 "참고용"을 표시한다. */
     val estimated: Boolean = false,
+    /** "improve" 약점 보완 / "maintain" 모든 요인이 또래 상위권이라 유지가 목표 */
+    val profile: String = "improve",
     /** estimated일 때 함께 보여줄 안내 문구. */
     val notice: String? = null,
     @SerializedName("total_score") val totalScore: Int,
@@ -71,6 +98,8 @@ data class DiagnoseResponse(
     val factors: List<FactorScore>,
     @SerializedName("weak_factors") val weakFactors: List<String>,
     val items: List<ItemScore> = emptyList(),
+    /** 집 측정에서 못 잰 요인. 정밀 진단이면 비어 있다. */
+    @SerializedName("unmeasured_factors") val unmeasuredFactors: List<UnmeasuredFactor> = emptyList(),
     val bmi: BmiResult? = null,
 )
 
@@ -121,9 +150,49 @@ data class RecommendQuery(
 
 data class RecommendResponse(
     val query: RecommendQuery,
+    /** "improve" 약점 보완 / "maintain" 이미 다 양호해서 유지가 목표 */
+    val profile: String = "improve",
+    @SerializedName("profile_notice") val profileNotice: String? = null,
     val total: Int,
     val items: List<Course>,
     val hint: String? = null,
+)
+
+/** 시간표 없이 언제든 이용할 수 있는 공공체육시설. */
+data class Facility(
+    val facility: String,
+    val address: String? = null,
+    val sport: String,
+    val lat: Double,
+    val lng: Double,
+    val tags: CourseTags,
+    @SerializedName("distance_km") val distanceKm: Double? = null,
+    val score: Double? = null,
+    @SerializedName("match_reason") val matchReason: String? = null,
+)
+
+/** 주소 입력창에서 고르는 지역. 좌표는 그 동네 공공체육시설들의 중심점이다. */
+data class Place(
+    val label: String,
+    val sido: String,
+    val sigungu: String,
+    val dong: String? = null,
+    val lat: Double,
+    val lng: Double,
+)
+
+data class PlaceResponse(
+    val query: String,
+    val total: Int,
+    val items: List<Place>,
+)
+
+data class FacilityResponse(
+    val profile: String = "improve",
+    val notice: String? = null,
+    val source: String? = null,
+    val total: Int,
+    val items: List<Facility>,
 )
 
 /** 국민체력100 체력인증센터. 전국 무료이며, 앱은 여기서 정밀 측정을 안내한다. */

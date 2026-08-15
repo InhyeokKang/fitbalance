@@ -1,7 +1,7 @@
 """스모크 테스트: 3개 핵심 엔드포인트가 명세대로 응답하는지 확인한다."""
 from fastapi.testclient import TestClient
 
-from main import app
+from main import app, WEEKDAYS
 
 SAMPLE = {
     "device_id": "test-device-0001",
@@ -23,8 +23,10 @@ def test_health():
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "ok"
+        # 기준표는 성별2 × 나이대9 × 항목5 × 백분위5 = 450행으로 고정이다.
         assert body["norms_rows"] == 450
-        assert body["courses_rows"] == 30
+        # 강좌 수는 데이터를 다시 만들면 달라지므로 적재 여부만 본다.
+        assert body["courses_rows"] > 0
 
 
 def test_demo_page_served():
@@ -169,31 +171,36 @@ def test_recommend_unknown_diagnosis_id_404():
 
 
 def test_courses_list_and_filter():
+    """강좌 수는 데이터가 바뀌면 달라진다. 개수가 아니라 필터가 도는지를 본다."""
     with TestClient(app) as c:
-        assert c.get("/api/v1/courses").json()["total"] == 30
+        assert c.get("/api/v1/courses").json()["total"] > 0
         flex = c.get("/api/v1/courses", params={"factor": "flex"}).json()
+        assert flex["total"] > 0
         assert all(i["tags"]["flex"] == 1 for i in flex["items"])
         late = c.get("/api/v1/courses", params={"after": "19:30"}).json()
         assert all(i["start_time"] >= "19:30" for i in late["items"])
 
 
 def test_course_detail_and_404():
+    """강좌 ID·이름은 데이터가 바뀌면 달라지므로 목록에서 하나 집어 구조를 본다."""
     with TestClient(app) as c:
-        b = c.get("/api/v1/courses/C012").json()
-        assert b["title"] == "저녁 요가 (중급)"
+        first = c.get("/api/v1/courses").json()["items"][0]["course_id"]
+        b = c.get(f"/api/v1/courses/{first}").json()
+        assert b["course_id"] == first
+        assert b["title"] and b["facility"] and b["sport"]
+        assert b["weekday"] in WEEKDAYS
         assert b["apply_url"].startswith("https://")
         assert c.get("/api/v1/courses/ZZZZ").status_code == 404
 
 
 def test_address_is_joined_everywhere():
-    """좌표 대신 주소를 보여줘야 하므로, 세 경로 모두에 address가 실려야 한다."""
+    """좌표 대신 주소를 보여줘야 하므로, 목록과 상세 모두에 address가 실려야 한다."""
     with TestClient(app) as c:
-        detail = c.get("/api/v1/courses/C012").json()
-        assert detail["address"], "상세에 주소가 없습니다"
-        assert detail["address"].startswith("서울")
-
-        listed = c.get("/api/v1/courses").json()["items"]
+        listed = c.get("/api/v1/courses", params={"limit": 200}).json()["items"]
         assert all(i["address"] for i in listed), "목록에 주소 없는 강좌가 있습니다"
+
+        detail = c.get(f"/api/v1/courses/{listed[0]['course_id']}").json()
+        assert detail["address"], "상세에 주소가 없습니다"
 
         rec = c.post("/api/v1/recommend", json={
             "device_id": "addr-test",

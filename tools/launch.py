@@ -98,6 +98,20 @@ def ensure_data(python: Path) -> None:
         subprocess.run([str(python), str(DATA_DIR / "_make_facility_addresses.py")], cwd=ROOT)
 
 
+def lan_address() -> str | None:
+    """같은 와이파이의 폰이 붙을 수 있는 이 PC의 주소. 못 찾으면 None."""
+    import socket
+
+    try:
+        # 실제로 보내지는 않는다. 어느 인터페이스로 나가는지만 확인한다.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        return ip if not ip.startswith("127.") else None
+    except OSError:
+        return None
+
+
 def wait_until_ready(timeout_sec: int = 60) -> bool:
     """서버가 응답할 때까지 기다린다."""
     deadline = time.time() + timeout_sec
@@ -123,8 +137,10 @@ def main() -> None:
     ensure_data(python)
 
     say("서버 켜는 중...")
+    # 0.0.0.0 으로 연다. 127.0.0.1 만 열면 같은 와이파이의 폰에서 못 붙는다.
+    # (에뮬레이터는 10.0.2.2 로 호스트 루프백을 보므로 어느 쪽이든 된다.)
     server = subprocess.Popen(
-        [str(python), "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(PORT)],
+        [str(python), "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(PORT)],
         cwd=SERVER_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -148,6 +164,12 @@ def main() -> None:
     print("")
     print("  브라우저가 안 열리면 아래 주소를 직접 입력하세요.")
     print(f"      {DEMO_URL}")
+    print("")
+    print("  안드로이드 앱에서 이 서버를 보게 하려면 local.properties 에")
+    print("      에뮬레이터 :  BASE_URL_DEBUG=http://10.0.2.2:8000/")
+    lan = lan_address()
+    if lan:
+        print(f"      같은 와이파이의 폰 :  BASE_URL_DEBUG=http://{lan}:{PORT}/")
     print("")
     print("  끝낼 때는 이 창을 닫거나 Ctrl+C 를 누르세요.")
     print("")

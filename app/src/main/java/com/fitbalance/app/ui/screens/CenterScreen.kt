@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +43,54 @@ import com.fitbalance.app.ui.components.VSpace
 import com.fitbalance.app.ui.theme.Brand
 
 /**
+ * 처음 가는 사람이 실제로 막히는 지점만 모았다.
+ *
+ * 센터 방문의 장벽은 비용이 아니라 "뭘 알고 가야 하는지 모른다"는 쪽이다.
+ * 공단 안내에 흩어져 있는 것을 순서대로 정리한다.
+ */
+private val FIRST_VISIT = listOf(
+    "예약" to "홈페이지나 전화로 예약합니다. 당일 방문은 받지 않는 곳이 많습니다.",
+    "준비물" to "신분증만 있으면 됩니다. 비용은 없습니다.",
+    "복장" to "운동복과 운동화. 달리기와 뛰기가 있어 정장 구두로는 못 잽니다.",
+    "식사" to "측정 2시간 전부터는 먹지 않습니다. 카페인도 피하세요.",
+    "걸리는 시간" to "문진과 상담까지 1시간~1시간 30분 정도 걸립니다.",
+    "받는 것" to "항목별 등급이 적힌 결과지와 운동처방 상담. 인증 기준을 넘으면 인증서도 나옵니다.",
+)
+
+@Composable
+private fun FirstVisitCard() {
+    AppCard(padding = 18) {
+        Column {
+            Text("처음 가시나요", style = MaterialTheme.typography.titleMedium)
+            VSpace(4)
+            Text(
+                "만 13세 이상이면 누구나, 무료입니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Brand.Muted2,
+            )
+            VSpace(12)
+            FIRST_VISIT.forEach { (label, desc) ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Brand.MintDeep,
+                        modifier = Modifier.width(72.dp),
+                    )
+                    Text(
+                        desc,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Brand.Muted,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * 체력인증센터 찾기.
  *
  * 측정 장비가 없어도 전국 체력인증센터에서 무료로 잴 수 있다는 사실을 알리는 화면이다.
@@ -50,8 +99,11 @@ import com.fitbalance.app.ui.theme.Brand
 @Composable
 fun CenterScreen(
     state: UiState<CenterResponse>,
+    /** 집 측정 결과가 있으면 센터에 가져갈 요약으로 넘어갈 수 있다. */
+    hasDiagnosis: Boolean,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onBrief: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -111,6 +163,20 @@ fun CenterScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = Brand.Muted2,
                         )
+
+                        VSpace(18)
+                        FirstVisitCard()
+
+                        if (hasDiagnosis) {
+                            VSpace(12)
+                            GhostButton("센터에 가져갈 요약 보기", onBrief)
+                            VSpace(6)
+                            Text(
+                                "집에서 잰 값을 정리해 보여 줍니다. 상담이 그만큼 빨라집니다.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Brand.Muted2,
+                            )
+                        }
 
                         if (r.nearbyCount > 0 && r.sido != null) {
                             VSpace(16)

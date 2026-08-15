@@ -103,7 +103,8 @@ private fun ReportBody(
                             )
                         }
                         Text(
-                            "5개 요인 백분위 평균",
+                            // 집 측정은 3개 요인만 잰다. 잰 개수를 그대로 쓴다.
+                            "${r.factors.size}개 요인 백분위 평균",
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.5f),
                         )
@@ -143,8 +144,9 @@ private fun ReportBody(
             }
         }
 
-        // 추정치는 기준표와 대조한 값이 아니다. 결과를 보기 전에 분명히 알린다.
-        if (r.estimated) {
+        // 추정치이거나 못 잰 항목이 있으면 결과를 보기 전에 분명히 알린다.
+        val notice = r.notice
+        if (notice != null) {
             VSpace(12)
             Box(
                 Modifier
@@ -154,7 +156,7 @@ private fun ReportBody(
                     .padding(14.dp)
             ) {
                 Text(
-                    r.notice ?: "설문으로 추정한 참고용 결과입니다.",
+                    notice,
                     style = MaterialTheme.typography.bodySmall,
                     color = Brand.MintDeep,
                     fontWeight = FontWeight.SemiBold,
@@ -162,19 +164,22 @@ private fun ReportBody(
             }
         }
 
+        // 모든 요인이 또래 상위권이면 그중 낮은 쪽을 '약점'이라 부르지 않는다.
+        val maintain = r.profile == "maintain"
+
         VSpace(12)
         AppCard(padding = 18) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(),
-            ) { RadarChart(r.factors, r.weakFactors) }
+            ) { RadarChart(r.factors, if (maintain) emptyList() else r.weakFactors) }
         }
 
         SectionHeader("체력요인별 순위")
         AppCard {
             Column {
                 r.factors.forEach { f ->
-                    FactorBar(f.label, f.percentile, f.grade, f.factor in r.weakFactors)
+                    FactorBar(f.label, f.percentile, f.grade, !maintain && f.factor in r.weakFactors)
                 }
                 VSpace(12)
                 val weakNames = r.factors.filter { it.factor in r.weakFactors }
@@ -184,10 +189,51 @@ private fun ReportBody(
                         "설문 답변으로 추정한 순위입니다. 숫자가 작을수록 좋습니다.\n"
                     else
                         "같은 성별·나이대 100명과 비교한 순위입니다. 숫자가 작을수록 좋습니다.\n") +
-                        "$weakNames 이(가) 가장 뒤처진 두 요인이며, 추천 강좌는 이 둘을 기준으로 고릅니다.",
+                        (if (maintain)
+                            "모든 요인이 상위권이라 따로 보완할 곳이 없습니다. " +
+                                "추천은 지금 수준을 이어 가는 쪽으로 고릅니다."
+                        else
+                            "$weakNames 이(가) 가장 뒤처진 두 요인이며, 추천 강좌는 이 둘을 기준으로 고릅니다."),
                     style = MaterialTheme.typography.bodySmall,
                     color = Brand.Muted2,
                 )
+            }
+        }
+
+        // 집에서 못 잰 요인. 순위표에 안 나오는 이유를 밝히고 센터로 잇는다.
+        if (r.unmeasuredFactors.isNotEmpty()) {
+            SectionHeader("아직 모르는 항목")
+            AppCard {
+                Column {
+                    r.unmeasuredFactors.forEach { u ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    u.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                VSpace(2)
+                                Text(u.item, fontSize = 11.sp, color = Brand.Muted2)
+                            }
+                            Text(
+                                u.reason,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Brand.Muted,
+                            )
+                        }
+                    }
+                    VSpace(8)
+                    Text(
+                        "체력인증센터에서 무료로 잽니다. 오늘 잰 3가지를 가져가면 " +
+                            "상담이 그만큼 빨라집니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Brand.Muted2,
+                    )
+                }
             }
         }
 

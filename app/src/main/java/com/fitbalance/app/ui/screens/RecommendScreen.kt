@@ -77,13 +77,34 @@ fun RecommendScreen(
                         )
                         VSpace(12)
                         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                            val weak = r.query.weakFactors.mapNotNull { FACTOR_LABEL[it] }
-                            Chip("${weak.joinToString("·")} 보강")
+                            // 유지형에게 '보강'이라 쓰면 사실이 아니다. 뒤처진 요인이 없다.
+                            if (r.profile == "maintain") {
+                                Chip("지금 수준 유지")
+                            } else {
+                                val weak = r.query.weakFactors.mapNotNull { FACTOR_LABEL[it] }
+                                Chip("${weak.joinToString("·")} 보강")
+                            }
                             Chip("${r.query.leaveTime} 퇴근", bg = Brand.TrackBg, fg = Brand.Muted)
                             Chip(
                                 "동선 ${r.query.maxDistanceKm}km 이내",
                                 bg = Brand.TrackBg, fg = Brand.Muted,
                             )
+                        }
+                        if (r.profileNotice != null) {
+                            VSpace(12)
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Brand.MintSoft)
+                                    .padding(14.dp)
+                            ) {
+                                Text(
+                                    r.profileNotice,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Brand.MintDeep,
+                                )
+                            }
                         }
                         VSpace(4)
                         if (r.total > 0) {

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  런처 아이콘 배경.
+
+  히어로 카드와 같은 어두운 잉크색을 쓴다. 마스코트가 민트색이라 대비가 크다.
+  런처가 어떤 모양으로 잘라도 색이 비도록 108x108 전체를 채운다.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path android:pathData="M0,0 h108 v108 h-108 Z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0" android:color="#FF101A1B" />
+                <item android:offset="0.55" android:color="#FF0C1112" />
+                <item android:offset="1" android:color="#FF0F2420" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 마스코트 뒤 은은한 민트 광 -->
+    <path android:pathData="M54,54 m-42,0 a42,42 0 1,0 84,0 a42,42 0 1,0 -84,0 Z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="42">
+                <item android:offset="0" android:color="#3300D68F" />
+                <item android:offset="1" android:color="#0000D68F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

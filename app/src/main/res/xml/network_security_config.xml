@@ -1,10 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 로컬 개발 서버(에뮬레이터의 호스트 PC)만 평문 HTTP를 허용한다. -->
+<!--
+  평문 HTTP 허용 범위.
+
+  기본은 HTTPS만 쓴다(안드로이드 9 이상 기본값). 배포한 서버는 HTTPS라
+  아무 설정 없이 통한다.
+
+  개발 중에는 노트북의 http 서버에 붙어야 한다. IP를 하나씩 적는 방식은
+  쓰지 않는다 — <domain>은 그 주소 하나만 정확히 매칭해서
+  "192.168.0.0"을 적어도 "192.168.0.15"에는 안 통한다.
+  대신 <debug-overrides>로 **디버그 빌드에서만** 평문을 연다.
+  릴리스 빌드는 그대로 HTTPS만 허용한다.
+-->
 <network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- 에뮬레이터에서 호스트 PC를 가리키는 주소. 릴리스에서도 무해하다. -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">localhost</domain>
-        <domain includeSubdomains="true">192.168.0.0</domain>
     </domain-config>
+
+    <!-- 디버그 빌드 한정. 같은 와이파이의 노트북 IP로 붙어 볼 때 쓴다. -->
+    <debug-overrides cleartextTrafficPermitted="true" />
 </network-security-config>
