@@ -94,8 +94,18 @@ yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses > /dev/null 2>&1 || true
 "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "emulator" "$SYS_IMAGE" \
   || die "안드로이드 이미지 설치에 실패했습니다. 인터넷 연결을 확인해 주세요."
 
+# sdkmanager 는 없는 패키지를 만나도 경고만 하고 0 으로 끝나는 일이 있다.
+# 폴더가 실제로 생겼는지 눈으로 확인해야 다음 단계가 엉뚱한 이미지로 흘러가지 않는다.
+IMAGE_DIR="$SDK_DIR/$(echo "$SYS_IMAGE" | tr ';' '/')"
+[ -f "$IMAGE_DIR/build.prop" ] \
+  || die "안드로이드 이미지가 설치되지 않았습니다.
+  기대한 경로: $IMAGE_DIR
+  인터넷 연결을 확인하고 다시 실행해 주세요."
+info "이미지 확인: $SYS_IMAGE"
+
 ADB="$SDK_DIR/platform-tools/adb"
 EMULATOR="$SDK_DIR/emulator/emulator"
+AVDMANAGER="$SDK_DIR/cmdline-tools/latest/bin/avdmanager"
 
 # 카카오 지도는 OpenGL ES 3가 필요하다. 에뮬레이터 기본값이 ES2라 켜 준다.
 mkdir -p "$HOME/.android"
@@ -104,12 +114,37 @@ grep -q "GLESDynamicVersion" "$HOME/.android/advancedFeatures.ini" 2>/dev/null \
 
 # 4) 가상 기기 -------------------------------------------------------------
 step "4/6" "가상 기기 만들기"
-if "$SDK_DIR/cmdline-tools/latest/bin/avdmanager" list avd 2>/dev/null | grep -q "$AVD_NAME"; then
+
+# AVD 가 실제로 어떤 이미지를 쓰는지 config.ini 에서 읽는다.
+# 이름만 보고 "이미 있으니 넘어가자" 하면 안 된다. 같은 이름으로 다른 이미지를 쓰는
+# AVD 가 남아 있으면 그걸 그대로 띄우게 되고, 그 경우
+#   - default(AOSP) 이미지에는 Gboard 가 없어 한글을 못 친다
+#   - ARM 변환이 없는 이미지에서는 카카오 지도(ARM 전용)가 안 뜬다
+# 겉보기에는 잘 켜지기 때문에 원인을 찾기 어렵다.
+avd_image() {
+  local cfg="$HOME/.android/avd/$AVD_NAME.avd/config.ini"
+  [ -f "$cfg" ] || return 0
+  sed -n 's|^ *image\.sysdir\.1 *= *||p' "$cfg" \
+    | head -n 1 | tr -d '\r' | sed 's|/*$||' | tr '/' ';'
+}
+
+CURRENT="$(avd_image)"
+if [ "$CURRENT" = "$SYS_IMAGE" ]; then
   info "이미 있음: $AVD_NAME"
 else
-  echo "no" | "$SDK_DIR/cmdline-tools/latest/bin/avdmanager" create avd \
-    -n "$AVD_NAME" -k "$SYS_IMAGE" -d pixel_6 --force > /dev/null
-  info "만들었습니다: $AVD_NAME"
+  if [ -n "$CURRENT" ]; then
+    info "기존 $AVD_NAME 이(가) 다른 이미지($CURRENT)를 씁니다. 다시 만듭니다."
+    "$AVDMANAGER" delete avd -n "$AVD_NAME" > /dev/null 2>&1 || true
+  fi
+  echo "no" | "$AVDMANAGER" create avd \
+    -n "$AVD_NAME" -k "$SYS_IMAGE" -d pixel_6 --force > /dev/null \
+    || die "가상 기기를 만들지 못했습니다. 다시 실행해 주세요."
+
+  MADE="$(avd_image)"
+  [ "$MADE" = "$SYS_IMAGE" ] || die "가상 기기가 엉뚱한 이미지로 만들어졌습니다.
+  기대: $SYS_IMAGE
+  실제: $MADE"
+  info "만들었습니다: $AVD_NAME ($SYS_IMAGE)"
 fi
 
 # 5) 에뮬레이터 실행 -------------------------------------------------------
@@ -166,7 +201,15 @@ fi
 
 info "앱 설치 중..."
 # 카카오 지도 SDK가 ARM 전용이라 ARM 라이브러리를 골라 넣는다.
-"$ADB" install -r --abi "$ABI" "$APK" || die "앱 설치에 실패했습니다."
+# google_apis 이미지는 abilist 에 arm64-v8a 가 있어 ARM 변환으로 돌아간다.
+ABILIST="$("$ADB" shell getprop ro.product.cpu.abilist 2>/dev/null | tr -d '\r\n')"
+info "기기 ABI: $ABILIST"
+if echo "$ABILIST" | grep -q "arm64-v8a"; then
+  "$ADB" install -r --abi "$ABI" "$APK" || die "앱 설치에 실패했습니다."
+else
+  info "이 이미지는 ARM 변환을 지원하지 않습니다. 지도 화면이 안 뜰 수 있습니다."
+  "$ADB" install -r "$APK" || die "앱 설치에 실패했습니다."
+fi
 "$ADB" shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 > /dev/null 2>&1 || true
 
 echo ""

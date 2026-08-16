@@ -141,8 +141,17 @@ $yes | & $SdkManager --sdk_root="$SdkDir" --licenses 2>&1 | Out-Null
 & $SdkManager --sdk_root="$SdkDir" "platform-tools" "emulator" $SysImage
 if ($LASTEXITCODE -ne 0) { Die "안드로이드 이미지 설치에 실패했습니다. 인터넷 연결을 확인해 주세요." }
 
+# sdkmanager 는 없는 패키지를 만나도 경고만 하고 0 으로 끝나는 일이 있다.
+# 폴더가 실제로 생겼는지 눈으로 확인해야 다음 단계가 엉뚱한 이미지로 흘러가지 않는다.
+$ImageDir = Join-Path $SdkDir ($SysImage -replace ";", "\")
+if (-not (Test-Path (Join-Path $ImageDir "build.prop"))) {
+    Die "안드로이드 이미지가 설치되지 않았습니다.`n  기대한 경로: $ImageDir`n  인터넷 연결을 확인하고 다시 실행해 주세요."
+}
+Info "이미지 확인: $SysImage"
+
 $Adb      = "$SdkDir\platform-tools\adb.exe"
 $Emulator = "$SdkDir\emulator\emulator.exe"
+$AvdManager = "$SdkDir\cmdline-tools\latest\bin\avdmanager.bat"
 
 # 카카오 지도는 OpenGL ES 3가 필요하다. 에뮬레이터 기본값이 ES2라 켜 준다.
 $featuresDir = "$env:USERPROFILE\.android"
@@ -155,13 +164,43 @@ if ($existing -notmatch "GLESDynamicVersion") {
 
 # 4) 가상 기기 -------------------------------------------------------------
 Step "4/6" "가상 기기 만들기"
-$avdList = & "$SdkDir\cmdline-tools\latest\bin\avdmanager.bat" list avd 2>&1 | Out-String
-if ($avdList -match [regex]::Escape($AvdName)) {
+
+<#
+.SYNOPSIS
+AVD 가 실제로 어떤 시스템 이미지를 쓰는지 config.ini 에서 읽는다.
+
+이름만 보고 "이미 있으니 넘어가자" 하면 안 된다. 같은 이름으로 다른 이미지를 쓰는
+AVD 가 남아 있으면 그걸 그대로 띄우게 되고, 그 경우
+  - default(AOSP) 이미지에는 Gboard 가 없어 한글을 못 친다
+  - ARM 변환이 없는 이미지에서는 카카오 지도(ARM 전용)가 안 뜬다
+겉보기에는 잘 켜지기 때문에 원인을 찾기 어렵다.
+#>
+function Get-AvdImage {
+    param([Parameter(Mandatory)][string]$Name)
+    $cfg = Join-Path $env:USERPROFILE ".android\avd\$Name.avd\config.ini"
+    if (-not (Test-Path $cfg)) { return $null }
+    $line = Select-String -Path $cfg -Pattern '^\s*image\.sysdir\.1\s*=' -ErrorAction SilentlyContinue
+    if (-not $line) { return $null }
+    # "system-images\android-30\google_apis\x86_64\" -> "system-images;android-30;google_apis;x86_64"
+    ($line.Line -replace '^\s*image\.sysdir\.1\s*=\s*', '').Trim().TrimEnd('\', '/') -replace '[\\/]', ';'
+}
+
+$current = Get-AvdImage -Name $AvdName
+if ($current -eq $SysImage) {
     Info "이미 있음: $AvdName"
 } else {
-    "no" | & "$SdkDir\cmdline-tools\latest\bin\avdmanager.bat" create avd `
-        -n $AvdName -k $SysImage -d pixel_6 --force | Out-Null
-    Info "만들었습니다: $AvdName"
+    if ($null -ne $current) {
+        Info "기존 $AvdName 이(가) 다른 이미지($current)를 씁니다. 다시 만듭니다."
+        & $AvdManager delete avd -n $AvdName 2>&1 | Out-Null
+    }
+    "no" | & $AvdManager create avd -n $AvdName -k $SysImage -d pixel_6 --force 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Die "가상 기기를 만들지 못했습니다. 다시 실행해 주세요." }
+
+    $made = Get-AvdImage -Name $AvdName
+    if ($made -ne $SysImage) {
+        Die "가상 기기가 엉뚱한 이미지로 만들어졌습니다.`n  기대: $SysImage`n  실제: $made"
+    }
+    Info "만들었습니다: $AvdName ($SysImage)"
 }
 
 # 5) 에뮬레이터 실행 -------------------------------------------------------
@@ -224,7 +263,15 @@ if (-not $python) {
 
 Info "앱 설치 중..."
 # 카카오 지도 SDK가 ARM 전용이라 ARM 라이브러리를 골라 넣는다.
-& $Adb install -r --abi arm64-v8a "$Apk"
+# google_apis 이미지는 abilist 에 arm64-v8a 가 있어 ARM 변환으로 돌아간다.
+$abilist = (& $Adb shell getprop ro.product.cpu.abilist 2>$null) -replace '\s', ''
+Info "기기 ABI: $abilist"
+if ($abilist -match "arm64-v8a") {
+    & $Adb install -r --abi arm64-v8a "$Apk"
+} else {
+    Info "이 이미지는 ARM 변환을 지원하지 않습니다. 지도 화면이 안 뜰 수 있습니다."
+    & $Adb install -r "$Apk"
+}
 if ($LASTEXITCODE -ne 0) { Die "앱 설치에 실패했습니다." }
 
 & $Adb shell monkey -p $PackageId -c android.intent.category.LAUNCHER 1 2>&1 | Out-Null
