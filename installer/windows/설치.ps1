@@ -43,6 +43,60 @@ function Die($text) {
     exit 1
 }
 
+# 예상 못 한 오류로 죽더라도 창이 그냥 사라지지 않게 한다.
+# 창이 닫혀 버리면 무엇 때문에 멈췄는지 알 길이 없다.
+trap {
+    Write-Host "`n예상치 못한 오류로 멈췄습니다." -ForegroundColor Red
+    Write-Host "  내용: $($_.Exception.Message)"
+    Write-Host "  위치: $($_.InvocationInfo.ScriptLineNumber)행"
+    Write-Host "`n이 내용을 그대로 알려 주세요."
+    Write-Host "창을 닫으려면 아무 키나 누르세요."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
+<#
+.SYNOPSIS
+외부 명령을 실행하고 출력을 버린다. 오류 메시지가 나와도 죽지 않는다.
+
+Windows PowerShell 5.1 은 `외부명령 2>&1` 을 만나면 stderr 한 줄 한 줄을
+ErrorRecord 로 바꾼다. 여기에 $ErrorActionPreference = "Stop" 이 걸려 있으면
+그게 곧 종료 오류가 되어 스크립트가 그 자리에서 죽는다.
+adb 는 정상 동작 중에도 stderr 로 안내 문구를 뱉기 때문에 반드시 감싸야 한다.
+성공/실패 판정은 이 함수가 아니라 호출한 쪽에서 $LASTEXITCODE 로 한다.
+#>
+function Invoke-Quiet {
+    param([Parameter(Mandatory)][scriptblock]$Block)
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { & $Block 2>&1 | Out-Null } finally { $ErrorActionPreference = $old }
+}
+
+# 위와 같되, stdout 과 stderr 를 합쳐 문자열로 돌려준다.
+function Invoke-Text {
+    param([Parameter(Mandatory)][scriptblock]$Block)
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { (& $Block 2>&1 | Out-String) } finally { $ErrorActionPreference = $old }
+}
+
+<#
+.SYNOPSIS
+기기가 살아날 때까지 기다린다. 제한 시간을 둔다.
+
+adb wait-for-device 는 시간 제한이 없어, 기기가 끝내 안 돌아오면
+아무 출력 없이 영원히 멈춘다.
+#>
+function Wait-Device {
+    param([int]$TimeoutSec = 180)
+    for ($i = 0; $i -lt $TimeoutSec; $i++) {
+        $state = (Invoke-Text { & $Adb get-state }).Trim()
+        if ($state -eq "device") { return $true }
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
+
 <#
 .SYNOPSIS
 파일을 내려받고 크기와 압축 무결성을 검증한다. 실패하면 다시 시도한다.
@@ -137,7 +191,7 @@ $env:ANDROID_SDK_ROOT = $SdkDir
 # 3) 에뮬레이터와 시스템 이미지 --------------------------------------------
 Step "3/6" "에뮬레이터와 안드로이드 이미지 (약 1.5GB, 가장 오래 걸립니다)"
 $yes = 1..40 | ForEach-Object { "y" }
-$yes | & $SdkManager --sdk_root="$SdkDir" --licenses 2>&1 | Out-Null
+Invoke-Quiet { $yes | & $SdkManager --sdk_root="$SdkDir" --licenses }
 & $SdkManager --sdk_root="$SdkDir" "platform-tools" "emulator" $SysImage
 if ($LASTEXITCODE -ne 0) { Die "안드로이드 이미지 설치에 실패했습니다. 인터넷 연결을 확인해 주세요." }
 
@@ -191,9 +245,9 @@ if ($current -eq $SysImage) {
 } else {
     if ($null -ne $current) {
         Info "기존 $AvdName 이(가) 다른 이미지($current)를 씁니다. 다시 만듭니다."
-        & $AvdManager delete avd -n $AvdName 2>&1 | Out-Null
+        Invoke-Quiet { & $AvdManager delete avd -n $AvdName }
     }
-    "no" | & $AvdManager create avd -n $AvdName -k $SysImage -d pixel_6 --force 2>&1 | Out-Null
+    Invoke-Quiet { "no" | & $AvdManager create avd -n $AvdName -k $SysImage -d pixel_6 --force }
     if ($LASTEXITCODE -ne 0) { Die "가상 기기를 만들지 못했습니다. 다시 실행해 주세요." }
 
     $made = Get-AvdImage -Name $AvdName
@@ -205,41 +259,63 @@ if ($current -eq $SysImage) {
 
 # 5) 에뮬레이터 실행 -------------------------------------------------------
 Step "5/6" "에뮬레이터 켜는 중 (처음에는 2~3분 걸립니다)"
-$running = (& $Adb devices) -match "emulator-\S+\s+device"
-if ($running) {
+# 부팅이 끝났는지 본다. 기기가 아직 안 붙었으면 adb 가 stderr 로 떠들기 때문에
+# 반드시 Invoke-Text 로 감싼다.
+function Test-Booted {
+    ((Invoke-Text { & $Adb shell getprop sys.boot_completed }) -replace '\s', '') -eq "1"
+}
+
+$running = (Invoke-Text { & $Adb devices }) -match "emulator-\S+\s+device"
+if ($running -and (Test-Booted)) {
     Info "이미 켜져 있음"
 } else {
-    Start-Process -FilePath $Emulator `
-        -ArgumentList @("-avd", $AvdName, "-gpu", "host", "-no-snapshot-load") `
-        -WindowStyle Normal
-    & $Adb wait-for-device | Out-Null
-    # wait-for-device 는 부팅 완료까지 기다리지 않는다. 부팅 플래그를 직접 본다.
+    if (-not $running) {
+        Start-Process -FilePath $Emulator `
+            -ArgumentList @("-avd", $AvdName, "-gpu", "host", "-no-snapshot-load") `
+            -WindowStyle Normal
+    }
+    if (-not (Wait-Device -TimeoutSec 180)) { Die "에뮬레이터가 붙지 않았습니다. 다시 실행해 주세요." }
+
+    # 기기가 붙어도 부팅은 아직이다. 부팅 플래그를 직접 본다.
+    $booted = $false
     for ($i = 0; $i -lt 180; $i++) {
-        $boot = (& $Adb shell getprop sys.boot_completed 2>$null) -replace '\s',''
-        if ($boot -eq "1") { break }
+        if (Test-Booted) { $booted = $true; break }
+        if ($i -gt 0 -and $i % 30 -eq 0) { Info "부팅 대기 중... ($($i * 2)초)" }
         Start-Sleep -Seconds 2
     }
-    if ($boot -ne "1") { Die "에뮬레이터가 시간 안에 켜지지 않았습니다. 다시 실행해 주세요." }
+    if (-not $booted) { Die "에뮬레이터가 시간 안에 켜지지 않았습니다. 다시 실행해 주세요." }
     Info "켜졌습니다"
 }
 
 # 한국어 자판. 없으면 지역 검색을 못 한다.
-Info "한국어 설정 중..."
-& $Adb shell "settings put system system_locales ko-KR,en-US" 2>&1 | Out-Null
-& $Adb root 2>&1 | Out-Null
+# 이 구간은 프레임워크를 재시작하기 때문에 1~2분 걸린다. 그동안 진행 표시를 남긴다.
+Info "한국어 설정 중... (1~2분, 화면이 한 번 꺼졌다 켜집니다)"
+Invoke-Quiet { & $Adb shell "settings put system system_locales ko-KR,en-US" }
+Invoke-Quiet { & $Adb root }
 Start-Sleep -Seconds 4
-& $Adb wait-for-device 2>&1 | Out-Null
-$localeSet = & $Adb shell "setprop persist.sys.locale ko-KR" 2>&1
-if ($localeSet -notmatch "Failed|Must be root") {
-    & $Adb shell "stop; start" 2>&1 | Out-Null
-    Start-Sleep -Seconds 45
-    & $Adb wait-for-device 2>&1 | Out-Null
-    Start-Sleep -Seconds 20
-    Info "한국어 적용됨 (자판 아래 지구본 키로 전환)"
+if (Wait-Device -TimeoutSec 60) {
+    $localeSet = Invoke-Text { & $Adb shell "setprop persist.sys.locale ko-KR" }
+} else {
+    $localeSet = "Failed"
+}
+if ($localeSet -notmatch "Failed|Must be root|error") {
+    Invoke-Quiet { & $Adb shell "stop; start" }
+    Start-Sleep -Seconds 10
+    if (Wait-Device -TimeoutSec 120) {
+        Info "  화면 다시 켜지는 중..."
+        for ($i = 0; $i -lt 90; $i++) {
+            if (Test-Booted) { break }
+            Start-Sleep -Seconds 2
+        }
+        Start-Sleep -Seconds 10
+        Info "한국어 적용됨 (자판 아래 지구본 키로 전환)"
+    } else {
+        Info "재시작이 늦어집니다. 한국어는 설정 > 시스템 > 언어에서 추가하세요."
+    }
 } else {
     Info "한국어 자동 설정 실패. 설정 > 시스템 > 언어에서 한국어를 추가하세요."
 }
-& $Adb unroot 2>&1 | Out-Null
+Invoke-Quiet { & $Adb unroot }
 
 # 6) 서버와 앱 -------------------------------------------------------------
 Step "6/6" "서버와 앱"
@@ -253,8 +329,9 @@ if (-not $python) {
     Info "파이썬이 없어 서버를 켜지 못했습니다."
     Info "https://www.python.org/downloads/ 에서 설치한 뒤 이 파일을 다시 실행하세요."
 } else {
+    Info "서버 준비 중... (처음에는 1~2분 걸립니다)"
+    Invoke-Quiet { & $python -m pip install --quiet -r (Join-Path $ServerDir "requirements.txt") }
     Info "서버 켜는 중..."
-    & $python -m pip install --quiet -r (Join-Path $ServerDir "requirements.txt") 2>&1 | Out-Null
     Start-Process -FilePath $python `
         -ArgumentList @("-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000") `
         -WorkingDirectory $Here -WindowStyle Minimized
@@ -264,17 +341,19 @@ if (-not $python) {
 Info "앱 설치 중..."
 # 카카오 지도 SDK가 ARM 전용이라 ARM 라이브러리를 골라 넣는다.
 # google_apis 이미지는 abilist 에 arm64-v8a 가 있어 ARM 변환으로 돌아간다.
-$abilist = (& $Adb shell getprop ro.product.cpu.abilist 2>$null) -replace '\s', ''
+$abilist = (Invoke-Text { & $Adb shell getprop ro.product.cpu.abilist }) -replace '\s', ''
 Info "기기 ABI: $abilist"
+Info "  48MB 를 밀어 넣습니다. 30초~1분 걸립니다."
 if ($abilist -match "arm64-v8a") {
-    & $Adb install -r --abi arm64-v8a "$Apk"
+    $out = Invoke-Text { & $Adb install -r --abi arm64-v8a "$Apk" }
 } else {
     Info "이 이미지는 ARM 변환을 지원하지 않습니다. 지도 화면이 안 뜰 수 있습니다."
-    & $Adb install -r "$Apk"
+    $out = Invoke-Text { & $Adb install -r "$Apk" }
 }
-if ($LASTEXITCODE -ne 0) { Die "앱 설치에 실패했습니다." }
+if ($LASTEXITCODE -ne 0) { Die "앱 설치에 실패했습니다.`n  $($out.Trim())" }
+Info "설치됨"
 
-& $Adb shell monkey -p $PackageId -c android.intent.category.LAUNCHER 1 2>&1 | Out-Null
+Invoke-Quiet { & $Adb shell monkey -p $PackageId -c android.intent.category.LAUNCHER 1 }
 
 Write-Host ""
 Write-Host "  설치가 끝났습니다. 에뮬레이터에서 앱이 열립니다." -ForegroundColor Green

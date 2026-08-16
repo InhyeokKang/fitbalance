@@ -43,6 +43,32 @@ step() { printf "\n\033[36m[%s] %s\033[0m\n" "$1" "$2"; }
 info() { printf "     \033[90m%s\033[0m\n" "$1"; }
 die()  { printf "\n\033[31m%s\033[0m\n\n" "$1"; read -r -p "엔터를 누르면 닫힙니다."; exit 1; }
 
+# set -e 로 중간에 죽더라도 창이 그냥 사라지지 않게 한다.
+# 창이 닫혀 버리면 무엇 때문에 멈췄는지 알 길이 없다.
+on_error() {
+  printf "\n\033[31m예상치 못한 오류로 멈췄습니다 (%s행).\033[0m\n" "$1"
+  printf "이 내용을 그대로 알려 주세요.\n\n"
+  read -r -p "엔터를 누르면 닫힙니다."
+  exit 1
+}
+trap 'on_error "$LINENO"' ERR
+
+# adb wait-for-device 는 시간 제한이 없어, 기기가 끝내 안 돌아오면
+# 아무 출력 없이 영원히 멈춘다. 제한을 둔다.
+wait_device() {
+  local limit="${1:-180}" i=0
+  while [ "$i" -lt "$limit" ]; do
+    [ "$("$ADB" get-state 2>/dev/null | tr -d '\r\n')" = "device" ] && return 0
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+booted() {
+  [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ]
+}
+
 echo ""
 printf "\033[32m  fitbalance 체험판 설치\033[0m\n"
 echo "  --------------------------------------------------------"
@@ -149,35 +175,50 @@ fi
 
 # 5) 에뮬레이터 실행 -------------------------------------------------------
 step "5/6" "에뮬레이터 켜는 중 (처음에는 2~3분 걸립니다)"
-if "$ADB" devices | grep -q "emulator-.*device"; then
+RUNNING=0
+"$ADB" devices 2>/dev/null | grep -q "emulator-.*device" && RUNNING=1
+if [ "$RUNNING" = "1" ] && booted; then
   info "이미 켜져 있음"
 else
-  "$EMULATOR" -avd "$AVD_NAME" -gpu host -no-snapshot-load > /dev/null 2>&1 &
-  "$ADB" wait-for-device
-  # wait-for-device 는 부팅 완료까지 기다리지 않는다. 부팅 플래그를 직접 본다.
-  for _ in $(seq 1 180); do
-    [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] && break
+  if [ "$RUNNING" = "0" ]; then
+    "$EMULATOR" -avd "$AVD_NAME" -gpu host -no-snapshot-load > /dev/null 2>&1 &
+  fi
+  wait_device 180 || die "에뮬레이터가 붙지 않았습니다. 다시 실행해 주세요."
+
+  # 기기가 붙어도 부팅은 아직이다. 부팅 플래그를 직접 본다.
+  BOOTED=0
+  for i in $(seq 1 180); do
+    if booted; then BOOTED=1; break; fi
+    [ $((i % 30)) -eq 0 ] && info "부팅 대기 중... ($((i * 2))초)"
     sleep 2
   done
-  [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] \
-    || die "에뮬레이터가 시간 안에 켜지지 않았습니다. 다시 실행해 주세요."
+  [ "$BOOTED" = "1" ] || die "에뮬레이터가 시간 안에 켜지지 않았습니다. 다시 실행해 주세요."
   info "켜졌습니다"
 fi
 
 # 한국어 자판. 없으면 지역 검색을 못 한다.
-info "한국어 설정 중..."
+# 이 구간은 프레임워크를 재시작하기 때문에 1~2분 걸린다.
+info "한국어 설정 중... (1~2분, 화면이 한 번 꺼졌다 켜집니다)"
 "$ADB" shell "settings put system system_locales ko-KR,en-US" > /dev/null 2>&1 || true
 "$ADB" root > /dev/null 2>&1 || true
 sleep 4
-"$ADB" wait-for-device > /dev/null 2>&1 || true
-if "$ADB" shell "setprop persist.sys.locale ko-KR" 2>&1 | grep -qi "failed\|must be root"; then
+wait_device 60 || true
+if "$ADB" shell "setprop persist.sys.locale ko-KR" 2>&1 | grep -qi "failed\|must be root\|error"; then
   info "한국어 자동 설정 실패. 설정 > 시스템 > 언어에서 한국어를 추가하세요."
 else
   "$ADB" shell "stop; start" > /dev/null 2>&1 || true
-  sleep 45
-  "$ADB" wait-for-device > /dev/null 2>&1 || true
-  sleep 20
-  info "한국어 적용됨 (자판 아래 지구본 키로 전환)"
+  sleep 10
+  if wait_device 120; then
+    info "  화면 다시 켜지는 중..."
+    for _ in $(seq 1 90); do
+      if booted; then break; fi
+      sleep 2
+    done
+    sleep 10
+    info "한국어 적용됨 (자판 아래 지구본 키로 전환)"
+  else
+    info "재시작이 늦어집니다. 한국어는 설정 > 시스템 > 언어에서 추가하세요."
+  fi
 fi
 "$ADB" unroot > /dev/null 2>&1 || true
 
@@ -192,8 +233,9 @@ if [ -z "$PYTHON" ]; then
   info "파이썬이 없어 서버를 켜지 못했습니다."
   info "https://www.python.org/downloads/ 에서 설치한 뒤 이 파일을 다시 실행하세요."
 else
-  info "서버 켜는 중..."
+  info "서버 준비 중... (처음에는 1~2분 걸립니다)"
   "$PYTHON" -m pip install --quiet -r "$HERE/server/requirements.txt" > /dev/null 2>&1 || true
+  info "서버 켜는 중..."
   ( cd "$HERE" && "$PYTHON" -m uvicorn server.main:app --host 0.0.0.0 --port 8000 \
       > "$HERE/server.log" 2>&1 & )
   sleep 10
@@ -202,8 +244,9 @@ fi
 info "앱 설치 중..."
 # 카카오 지도 SDK가 ARM 전용이라 ARM 라이브러리를 골라 넣는다.
 # google_apis 이미지는 abilist 에 arm64-v8a 가 있어 ARM 변환으로 돌아간다.
-ABILIST="$("$ADB" shell getprop ro.product.cpu.abilist 2>/dev/null | tr -d '\r\n')"
+ABILIST="$("$ADB" shell getprop ro.product.cpu.abilist 2>/dev/null | tr -d '\r\n' || true)"
 info "기기 ABI: $ABILIST"
+info "  48MB 를 밀어 넣습니다. 30초~1분 걸립니다."
 if echo "$ABILIST" | grep -q "arm64-v8a"; then
   "$ADB" install -r --abi "$ABI" "$APK" || die "앱 설치에 실패했습니다."
 else
