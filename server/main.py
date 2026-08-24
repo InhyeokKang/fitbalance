@@ -571,6 +571,55 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="FitBalance API", version="0.1.0", lifespan=lifespan)
 
 
+# ---------------------------------------------------------------- 속도 제한
+#
+# 인터넷에 열어 두면 아무나 무제한으로 부를 수 있다. 무료 플랜은 그것만으로도
+# 죽고, 무작위 대입으로 남의 diagnosis_id 를 찾는 것도 쉬워진다.
+# 외부 의존성을 늘리지 않으려고 메모리에 IP별 요청 시각만 들고 있는다.
+# 인스턴스가 하나라 이 방식으로 충분하다.
+RATE_LIMIT = 60          # 1분에 허용할 요청 수
+RATE_WINDOW = 60.0       # 초
+_hits: dict[str, list[float]] = {}
+
+
+def _client_ip(request) -> str:
+    """Render 는 프록시 뒤에 있어 X-Forwarded-For 의 맨 앞이 진짜 클라이언트다."""
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.middleware("http")
+async def rate_limit(request, call_next):
+    path = request.url.path
+    # 헬스체크는 Render 가 주기적으로 부른다. 여기에 걸리면 서비스가 죽은 것으로 본다.
+    if not path.startswith("/api/") or path == "/api/v1/health":
+        return await call_next(request)
+
+    import time
+    now = time.monotonic()
+    ip = _client_ip(request)
+    recent = [t for t in _hits.get(ip, []) if now - t < RATE_WINDOW]
+    if len(recent) >= RATE_LIMIT:
+        _hits[ip] = recent
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "요청이 너무 잦습니다. 잠시 뒤 다시 시도해 주세요."},
+            headers={"Retry-After": str(int(RATE_WINDOW))},
+        )
+    recent.append(now)
+    _hits[ip] = recent
+
+    # 오래된 IP 를 치워 메모리가 계속 늘지 않게 한다.
+    if len(_hits) > 5000:
+        for k in [k for k, v in _hits.items() if not v or now - v[-1] > RATE_WINDOW]:
+            _hits.pop(k, None)
+
+    return await call_next(request)
+
+
 @app.get("/demo")
 def demo_page():
     """개발용 브라우저 미리보기. 앱과 같은 API를 호출한다(안드로이드 빌드 대체물 아님)."""

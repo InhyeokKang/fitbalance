@@ -298,3 +298,17 @@ def test_diagnosis_id_is_hard_to_guess():
         did = c.post("/api/v1/diagnose", json=SAMPLE).json()["diagnosis_id"]
     random_part = did.rsplit("_", 1)[-1]
     assert len(random_part) == 32, f"무작위 부분이 {len(random_part)}자뿐입니다: {did}"
+
+
+def test_rate_limit_blocks_flood_but_not_healthcheck():
+    """공개 서버는 아무나 부를 수 있다. 헬스체크는 막히면 안 된다."""
+    import main
+    main._hits.clear()
+    with TestClient(app) as c:
+        codes = [c.get("/api/v1/places?q=반포").status_code
+                 for _ in range(main.RATE_LIMIT + 3)]
+        assert codes[:main.RATE_LIMIT] == [200] * main.RATE_LIMIT
+        assert codes[main.RATE_LIMIT] == 429
+        # Render 가 주기적으로 부르는 경로라 여기 걸리면 서비스가 죽은 것으로 본다
+        assert c.get("/api/v1/health").status_code == 200
+    main._hits.clear()
