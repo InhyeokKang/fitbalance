@@ -18,6 +18,17 @@ val releaseBaseUrl: String = localProps.getProperty("BASE_URL_RELEASE") ?: debug
 // 카카오 지도 네이티브 앱 키. 없으면 빈 문자열이고, 앱은 자체 도식 지도로 넘어간다.
 val kakaoMapKey: String = localProps.getProperty("KAKAO_MAP_KEY").orEmpty()
 
+// 릴리스 서명 정보. local.properties 에만 두고 커밋하지 않는다.
+// 네 값이 다 있을 때만 서명하고, 하나라도 없으면 서명 없이 빌드한다.
+// (개발 중에는 없는 게 정상이므로 빌드를 실패시키지 않는다.)
+val releaseStoreFile: String? = localProps.getProperty("RELEASE_STORE_FILE")
+val releaseStorePassword: String? = localProps.getProperty("RELEASE_STORE_PASSWORD")
+val releaseKeyAlias: String? = localProps.getProperty("RELEASE_KEY_ALIAS")
+val releaseKeyPassword: String? = localProps.getProperty("RELEASE_KEY_PASSWORD")
+val hasReleaseSigning: Boolean = listOf(
+    releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword,
+).all { !it.isNullOrBlank() } && rootProject.file(releaseStoreFile!!).exists()
+
 android {
     namespace = "com.fitbalance.app"
     compileSdk = 35
@@ -32,6 +43,17 @@ android {
         buildConfigField("String", "KAKAO_MAP_KEY", "\"$kakaoMapKey\"")
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "BASE_URL", "\"$debugBaseUrl\"")
@@ -40,6 +62,9 @@ android {
             isMinifyEnabled = false
             buildConfigField("String", "BASE_URL", "\"$releaseBaseUrl\"")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

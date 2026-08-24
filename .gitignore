@@ -28,3 +28,7 @@ data/raw/
 # 배포 파일 (릴리스에 올리므로 저장소에는 두지 않는다)
 dist/
 site/downloads/
+
+# 서명 키. 유출되면 남이 우리 앱 이름으로 앱을 낼 수 있다.
+*.jks
+*.keystore
