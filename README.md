@@ -66,9 +66,9 @@
 | FastAPI 백엔드 | 동작 확인 완료, pytest 16건 통과 |
 | 체력 기준표 450행 | 국민체력100 실측 15만 건에서 생성 (2022년 개정 기준 이후) |
 | 공공체육시설 | 전국 34,727곳 중 강습 가능 5,804곳 |
-| 지역 색인 2,159곳 | 전국 16개 시·도, 동 단위 검색 |
+| 지역 색인 2,153곳 | 전국 16개 시·도, 동 단위 검색 |
 | 체력인증센터 78개소 | 전국 실데이터 |
-| 강좌 시간표 | **표본 167건** — 최서영 트랙에서 실데이터로 교체 예정 |
+| 강좌 시간표 | **실데이터 2,945건** — 전국평생학습강좌표준데이터. 광주·전남·세종은 아직 비어 있음 |
 | 안드로이드 앱 | 빌드·에뮬레이터 동작 확인 완료 |
 | 카카오 지도 | 실제 렌더링 확인 완료 (설정은 `docs/개발_진행_가이드.md`) |
 | 홈페이지 | GitHub Pages 배포 완료 |
@@ -115,11 +115,15 @@ python tools/build_norms.py        # -> data/norms.csv (기준표 450행)
 python tools/fetch_facilities.py --all   # 전국 공공체육시설
 python tools/build_courses.py      # -> courses_seed.csv, facility_addresses.csv
 python tools/build_places.py       # -> places.csv (지역 검색 색인)
-python tools/build_demo_courses.py # -> courses.csv (표본 강좌)
+python tools/fetch_lessons.py      # -> data/raw/lessons.csv (전국 강좌)
+python tools/build_courses_from_lessons.py  # -> courses.csv
+python tools/geocode_addresses.py  # 주소 -> 좌표 (카카오 로컬)
+python tools/build_courses_from_lessons.py  # 새 좌표를 붙여 다시 생성
 python tools/fetch_centers.py      # -> centers.csv (체력인증센터)
 ```
 
 인증키는 `local.properties` 에 둔다(커밋되지 않음).
+`DATA_GO_KR_KEY`(공공데이터포털), `KAKAO_MAP_KEY`(지도), `KAKAO_REST_KEY`(주소→좌표).
 
 ### 데이터 교체
 
