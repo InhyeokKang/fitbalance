@@ -53,6 +53,7 @@ fun RecommendScreen(
     onSettings: () -> Unit,
     onCourseClick: (String) -> Unit,
     onMap: () -> Unit,
+    onFacilities: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(Brand.Bg)) {
         when (state) {
@@ -114,7 +115,7 @@ fun RecommendScreen(
                     }
 
                     if (r.total == 0) {
-                        item { EmptyResult(r.hint, onSettings, onBack) }
+                        item { EmptyResult(r.hint, r.facilityCount, onFacilities, onSettings, onBack) }
                     } else {
                         itemsIndexed(r.items, key = { _, c -> c.courseId }) { index, course ->
                             CourseCard(course, index + 1) { onCourseClick(course.courseId) }
@@ -230,7 +231,13 @@ private fun CourseCard(c: Course, rank: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EmptyResult(hint: String?, onSettings: () -> Unit, onBack: () -> Unit) {
+private fun EmptyResult(
+    hint: String?,
+    facilityCount: Int,
+    onFacilities: () -> Unit,
+    onSettings: () -> Unit,
+    onBack: () -> Unit,
+) {
     Column(
         Modifier.fillMaxWidth().padding(vertical = 44.dp, horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -250,7 +257,16 @@ private fun EmptyResult(hint: String?, onSettings: () -> Unit, onBack: () -> Uni
             textAlign = TextAlign.Center,
         )
         VSpace(18)
-        PrimaryButton("조건 수정하기", onSettings)
+        // 평생학습 강좌는 주간 위주라 퇴근 후 시작하는 것이 전체의 18%뿐이다.
+        // 여기서 "조건을 고쳐 보세요" 만 내밀면 사용자가 할 수 있는 게 없다.
+        // 시간표에 매이지 않는 공공체육시설을 먼저 권한다.
+        if (facilityCount > 0) {
+            PrimaryButton("가까운 공공시설 ${facilityCount}곳 보기", onFacilities)
+            VSpace(9)
+            GhostButton("조건 수정하기", onSettings)
+        } else {
+            PrimaryButton("조건 수정하기", onSettings)
+        }
         VSpace(9)
         GhostButton("홈으로", onBack)
     }

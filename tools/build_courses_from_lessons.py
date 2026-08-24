@@ -50,14 +50,15 @@ SPORT_RULES: list[tuple[str, str, list[str]]] = [
     ("요가|하타|빈야사", "요가", ["flex", "strength"]),
     ("배드민턴", "배드민턴", ["cardio", "power"]),
     ("탁구", "탁구", ["cardio", "power"]),
-    ("테니스|정구", "테니스", ["cardio", "power"]),
+    ("테니스", "테니스", ["cardio", "power"]),
     ("골프", "골프", ["flex", "power"]),
     ("볼링", "볼링", ["power", "strength"]),
     ("검도|태권도|합기도|주짓수|복싱|무에타이|킥복싱", "무도", ["strength", "power"]),
     ("클라이밍|암벽", "클라이밍", ["strength", "flex"]),
     ("스피닝|사이클|자전거", "스피닝", ["cardio", "endurance"]),
     ("에어로빅|줌바|라인댄스|밸리댄스|댄스", "댄스", ["cardio", "endurance"]),
-    ("국학기공|기공|태극권|단전", "기공", ["flex", "endurance"]),
+    # '기공'은 "도자기공예"에 걸린다. 앞에 국학·단전이 붙거나 뒤에 체조가 오는 경우만 본다.
+    ("국학기공|단전호흡|기공체조|태극권|단전", "기공", ["flex", "endurance"]),
     ("등산|트레킹|걷기|워킹", "걷기", ["cardio", "endurance"]),
     ("헬스|웨이트|근력|코어", "웨이트", ["strength", "endurance"]),
     ("스트레칭|체조", "생활체조", ["flex", "endurance"]),
@@ -196,6 +197,25 @@ def load_coords() -> dict[str, tuple[float, float]]:
     return out
 
 
+# 이 앱은 직장인용이다. 어린이·청소년·노인 대상 강좌는 추천해도 갈 수 없다.
+# 원자료의 '교육대상구분' 은 비어 있는 경우가 많아 강좌명으로도 함께 본다.
+NOT_ADULT_RE = re.compile(
+    r"어린이|유아|아동|초등|중등|고등학생|청소년|키즈|주니어|아이와|엄마와|부모와|가족"
+    r"|시니어|실버|노인|어르신|경로|치매|장애인|재활"
+)
+ADULT_TARGET_OK = re.compile(r"성인|일반|직장인|청년|중장년|누구나|제한없음|전체")
+
+
+def is_for_workers(title: str, target: str) -> bool:
+    """직장인이 실제로 들을 수 있는 강좌인지 본다."""
+    if NOT_ADULT_RE.search(title):
+        return False
+    target = (target or "").strip()
+    if target and not ADULT_TARGET_OK.search(target) and NOT_ADULT_RE.search(target):
+        return False
+    return True
+
+
 def has_ended(raw: str, today: str) -> bool:
     """교육종료일자가 오늘보다 앞이면 이미 끝난 강좌다.
 
@@ -224,7 +244,8 @@ def main() -> None:
     rows: list[list] = []
     addresses: dict[str, str] = {}
     dropped = {"종목 판정 실패": 0, "요일 없음": 0, "시각 없음": 0,
-               "좌표 못 찾음": 0, "이미 끝난 강좌": 0}
+               "좌표 못 찾음": 0, "이미 끝난 강좌": 0,
+               "직장인 대상 아님": 0}
     exact_hit = 0
 
     for r in lessons:
@@ -234,6 +255,12 @@ def main() -> None:
 
         if has_ended(r.get("교육종료일자") or "", today):
             dropped["이미 끝난 강좌"] += 1
+            continue
+
+        # 열 이름이 출처마다 다르다. API 는 '교육대상', 표준 CSV 는 '교육대상구분'.
+        target = (r.get("교육대상") or r.get("교육대상구분") or "")
+        if not is_for_workers(name, target):
+            dropped["직장인 대상 아님"] += 1
             continue
 
         mapped = sport_of(name, r.get("강좌내용") or "")

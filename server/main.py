@@ -344,10 +344,21 @@ def percentile_of(conn: sqlite3.Connection, gender: str, band: str, item: str, v
     points = [(float(r["value"]), float(r["percentile"])) for r in rows]
     points.sort()  # 값이 클수록 우수한 항목 기준
 
+    # 기준표는 10·25·50·75·90 백분위 다섯 점뿐이다. 그 바깥을 곧장 1 또는 99로
+    # 잘라 버리면 경계에서 순위가 절벽처럼 튄다(p10 값에서 조금만 낮아도 90등 -> 99등).
+    # 인구의 20%가 이 바깥에 있으므로, 가장 바깥 구간의 기울기를 그대로 이어 붙인다.
+    def extend(near, far, value: float) -> float:
+        v0, p0 = near
+        v1, p1 = far
+        if v1 == v0:
+            return p0
+        p = p0 + (value - v0) * (p1 - p0) / (v1 - v0)
+        return round(min(99.0, max(1.0, p)), 1)
+
     if value <= points[0][0]:
-        return 1.0
+        return extend(points[0], points[1], value)
     if value >= points[-1][0]:
-        return 99.0
+        return extend(points[-1], points[-2], value)
     for (v0, p0), (v1, p1) in zip(points, points[1:]):
         if v0 <= value <= v1:
             if v1 == v0:
@@ -938,7 +949,22 @@ def recommend(req: RecommendRequest):
             "items": top,
         }
         if not top:
-            response["hint"] = "조건에 맞는 강좌가 없습니다. 최대 거리를 넓히거나 퇴근 시각을 조정해 보세요."
+            # 강좌가 없을 때 "거리를 넓혀 보세요" 만 내밀면 막다른 길이다.
+            # 평생학습 강좌는 주간 위주라 퇴근 후 시작하는 것이 전체의 18%뿐이고,
+            # 주요 도시 14곳 중 7곳이 18:30·3km 조건에서 0건이 나온다.
+            # 반면 공공체육시설은 시간표가 없어 어디서나 잡힌다. 그쪽을 같이 알려 준다.
+            nearby = count_facilities_near(conn, req)
+            if nearby:
+                response["hint"] = (
+                    f"이 시간·거리에 맞는 강좌가 없습니다. "
+                    f"대신 시간표 없이 갈 수 있는 공공체육시설이 {nearby}곳 있습니다."
+                )
+                response["facility_count"] = nearby
+            else:
+                response["hint"] = (
+                    "조건에 맞는 강좌가 없습니다. 최대 거리를 넓히거나 퇴근 시각을 조정해 보세요."
+                )
+                response["facility_count"] = 0
             conn.execute(
                 "INSERT INTO match_fail_logs (device_id, logged_at, weak_factors, work_lat, work_lng, leave_time)"
                 " VALUES (?,?,?,?,?,?)",
@@ -951,6 +977,22 @@ def recommend(req: RecommendRequest):
         return response
     finally:
         conn.close()
+
+
+def count_facilities_near(conn: sqlite3.Connection, req) -> int:
+    """퇴근 동선 주변에 쓸 만한 공공체육시설이 몇 곳인지 센다.
+
+    강좌 추천이 0건일 때 사용자에게 내밀 대안이 있는지 알려 주는 용도다.
+    점수는 필요 없고 개수만 있으면 되므로 정렬·사유 생성은 하지 않는다.
+    """
+    n = 0
+    for r in conn.execute("SELECT lat, lng FROM facilities").fetchall():
+        dist = distance_to_route_km(
+            r["lat"], r["lng"], req.work_lat, req.work_lng, req.home_lat, req.home_lng
+        )
+        if dist <= req.max_distance_km:
+            n += 1
+    return n
 
 
 def _place_dict(r: sqlite3.Row) -> dict:

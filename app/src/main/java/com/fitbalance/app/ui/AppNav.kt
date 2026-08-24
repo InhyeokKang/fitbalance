@@ -256,6 +256,10 @@ fun AppNav(vm: AppViewModel = viewModel()) {
                 onSettings = { nav.navigate(Routes.SETTINGS) },
                 onCourseClick = { id -> nav.navigate(Routes.course(id)) },
                 onMap = { nav.navigate(Routes.MAP) },
+                onFacilities = {
+                    vm.loadFacilities()
+                    nav.navigate(Routes.FACILITIES)
+                },
             )
         }
 
