@@ -48,7 +48,16 @@ fun TimeField(
         VSpace(6)
         OutlinedTextField(
             value = value,
-            onValueChange = onChange,
+            // 숫자만 받아 콜론을 대신 넣어 준다.
+            // 숫자 키패드에는 ':' 키가 없는데 검사는 HH:MM 을 요구해서,
+            // 사용자가 시각을 한 번 지우면 다시 넣을 방법이 없었다.
+            onValueChange = { raw ->
+                val digits = raw.filter(Char::isDigit).take(4)
+                onChange(
+                    if (digits.length <= 2) digits
+                    else digits.substring(0, 2) + ":" + digits.substring(2)
+                )
+            },
             isError = !valid,
             singleLine = true,
             shape = RoundedCornerShape(14.dp),

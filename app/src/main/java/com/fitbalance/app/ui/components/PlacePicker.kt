@@ -65,6 +65,10 @@ fun PlacePicker(
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
+    // '변경'을 눌렀는지 따로 둔다.
+    // 예전에는 query = " " 로 편집 모드를 열려고 했는데, " ".isBlank() 가 참이라
+    // 조건이 그대로여서 버튼을 눌러도 아무 일이 없었다. 선택을 바꿀 방법이 없었다.
+    var editing by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf<List<Place>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf<String?>(null) }
@@ -103,8 +107,8 @@ fun PlacePicker(
         )
         VSpace(8)
 
-        if (selected != null && query.isBlank()) {
-            SelectedCard(selected) { query = " " }
+        if (selected != null && !editing) {
+            SelectedCard(selected) { editing = true }
         } else {
             OutlinedTextField(
                 value = query,
@@ -147,6 +151,7 @@ fun PlacePicker(
                         else -> ResultList(results) {
                             onPick(it)
                             query = ""
+                            editing = false
                         }
                     }
                 }
@@ -156,7 +161,7 @@ fun PlacePicker(
                 VSpace(10)
                 Hint("시·도별로 먼저 고르기", Brand.Muted)
                 VSpace(6)
-                ResultList(popular) { onPick(it); query = "" }
+                ResultList(popular) { onPick(it); query = ""; editing = false }
                 VSpace(8)
                 Hint("동 이름으로 바로 찾아도 됩니다. 예) 전포동 · 망원동", Brand.Muted2)
             }

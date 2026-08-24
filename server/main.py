@@ -925,6 +925,12 @@ def recommend(req: RecommendRequest):
                     else f"퇴근 동선에서 {dist:.1f}km, {r['sport']} 종목"
                 )
 
+            # 주말 강좌는 위에서 퇴근 시각 제약을 면제했다. 그 이유를 적어 준다.
+            # 안 적으면 "21:30 퇴근"으로 검색했는데 토요일 10시 강좌가 나와서
+            # 사용자가 오류로 본다.
+            if is_weekend:
+                reason += " (주말이라 퇴근 시각과 무관합니다)"
+
             item = _course_dict(r)
             item.update({"distance_km": round(dist, 1), "score": round(score, 2), "match_reason": reason})
             scored.append(item)
