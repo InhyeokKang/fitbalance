@@ -56,6 +56,15 @@ ITEM_TO_FACTOR = {
     "standing_jump": "power",
 }
 
+# 행정구역 통합으로 시도명에서 사라진 이름을 검색으로 살린다.
+# 광주광역시는 전남광주통합특별시에 흡수돼 시군구 목록에 '광주'가 없다.
+# 그대로 두면 "광주"를 친 사용자에게 순천·여수나 경기도 광주시가 나온다.
+_GWANGJU_GU = ["동구", "서구", "남구", "북구", "광산구"]
+PLACE_ALIAS: dict[str, dict] = {
+    "광주": {"sido": "전남광주", "sigungu": _GWANGJU_GU},
+    "광주광역시": {"sido": "전남광주", "sigungu": _GWANGJU_GU},
+}
+
 # 지역 목록을 낼 때 쓰는 시도 순서. 인구가 많은 곳을 앞에 둔다.
 # 검색어 없이 열었을 때 보여 줄 순서이므로 사용자가 찾을 확률이 높은 쪽이 위여야 한다.
 # 광주·전남은 전남광주통합특별시로 하나다.
@@ -211,6 +220,20 @@ def load_csv_to_sqlite() -> tuple[int, int]:
             )
             for r in reader
         ]
+
+    # 좌표가 남한 밖이면 적재를 거부한다.
+    # 예전에 지역 색인에 0,0 과 서해 좌표가 섞여 강좌가 바다에 찍힌 적이 있다.
+    # 지도에 띄우기 전까지 아무도 모르기 때문에, 여기서 잡고 멈춘다.
+    outside = [
+        (c[0], c[3], c[4]) for c in course_rows
+        if not (33.0 <= c[3] <= 38.7 and 125.5 <= c[4] <= 131.0)
+    ]
+    if outside:
+        sample = ", ".join(f"{cid}({lat},{lng})" for cid, lat, lng in outside[:5])
+        raise RuntimeError(
+            f"courses.csv 의 좌표 {len(outside)}건이 남한 범위 밖입니다: {sample}"
+        )
+
     cur.executemany("INSERT INTO courses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", course_rows)
 
     # 시설 주소 참조표. courses.csv 스키마가 계약으로 고정돼 있어 별도 파일로 둔다.
@@ -982,10 +1005,38 @@ def search_places(
         sql = "SELECT * FROM places WHERE 1=1"
         params: list = []
         for t in terms:
-            sql += " AND (sido LIKE ? OR sigungu LIKE ? OR dong LIKE ?)"
-            params += [f"%{t}%"] * 3
-        # 시설이 많은 동네를 앞에 둔다. 이름이 짧을수록 사용자가 찾던 곳일 확률이 높다.
-        sql += " ORDER BY facility_count DESC, LENGTH(sigungu) + LENGTH(dong) ASC LIMIT ?"
+            clause = "sido LIKE ? OR sigungu LIKE ? OR dong LIKE ?"
+            args = [f"%{t}%"] * 3
+            extra = PLACE_ALIAS.get(t)
+            if extra:
+                # 통합으로 시도명에서 사라진 이름을 살린다.
+                # 광주는 '전남광주통합특별시'에 흡수돼 시군구에 '광주'가 없다.
+                # 그대로 두면 "광주"를 친 사용자에게 순천·여수가 나온다.
+                marks = ",".join("?" * len(extra["sigungu"]))
+                clause += f" OR (sido LIKE ? AND sigungu IN ({marks}))"
+                args += [f"%{extra['sido']}%"] + list(extra["sigungu"])
+            sql += f" AND ({clause})"
+            params += args
+
+        # 시군구·동에 걸린 것을 시도명에만 걸린 것보다 앞에 둔다.
+        # 이게 없으면 "광주"에 시도명이 걸려 전남 전역이 먼저 나온다.
+        # 별칭으로 걸린 곳(옛 광주광역시 자치구)도 같은 대접을 받아야 한다.
+        parts: list[str] = []
+        order_params: list = []
+        for t in terms:
+            cond = "sigungu LIKE ? OR dong LIKE ?"
+            order_params += [f"%{t}%"] * 2
+            extra = PLACE_ALIAS.get(t)
+            if extra:
+                marks = ",".join("?" * len(extra["sigungu"]))
+                cond += f" OR (sido LIKE ? AND sigungu IN ({marks}))"
+                order_params += [f"%{extra['sido']}%"] + list(extra["sigungu"])
+            parts.append(f"(CASE WHEN {cond} THEN 1 ELSE 0 END)")
+        score = " + ".join(parts)
+        # 그다음은 시설이 많은 동네 순. 이름이 짧을수록 사용자가 찾던 곳일 확률이 높다.
+        sql += (f" ORDER BY ({score}) DESC, facility_count DESC,"
+                " LENGTH(sigungu) + LENGTH(dong) ASC LIMIT ?")
+        params += order_params
         params.append(limit)
 
         rows = conn.execute(sql, params).fetchall()

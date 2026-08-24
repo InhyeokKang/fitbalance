@@ -3,6 +3,26 @@ from fastapi.testclient import TestClient
 
 from main import app, WEEKDAYS
 
+
+
+def a_corridor(client, weak=("flex", "power"), leave="18:30"):
+    """데이터 안에 실제로 있는 강좌 하나를 골라 그 주변 동선을 만든다.
+
+    예전에는 서울 시청~강남 좌표를 박아 뒀는데, 강좌 좌표를 시군구 대표점에서
+    실제 주소 좌표로 바꾸자 그 동선 3km 안에 퇴근 후 강좌가 하나도 없어
+    테스트가 깨졌다. 테스트가 검증할 것은 추천 로직이지 특정 지역의 강좌 유무가
+    아니므로, 기준점을 데이터에서 뽑는다.
+    """
+    rows = client.get("/api/v1/courses",
+                      params={"after": leave, "limit": 200}).json()["items"]
+    for it in rows:
+        if any(it["tags"].get(w) for w in weak):
+            return it["lat"], it["lng"]
+    if rows:                             # 태그까지 맞는 게 없으면 시각만 맞춰도 된다
+        return rows[0]["lat"], rows[0]["lng"]
+    raise AssertionError(f"{leave} 이후 시작하는 강좌가 데이터에 없습니다")
+
+
 SAMPLE = {
     "device_id": "test-device-0001",
     "gender": "M",
@@ -128,11 +148,12 @@ def test_selfcheck_result_drives_recommendation():
 def test_recommend_ranks_courses_for_weak_factors():
     with TestClient(app) as c:
         d = c.post("/api/v1/diagnose", json=SAMPLE).json()
+        lat, lng = a_corridor(c, d["weak_factors"])
         r = c.post("/api/v1/recommend", json={
             "device_id": SAMPLE["device_id"],
             "diagnosis_id": d["diagnosis_id"],
-            "work_lat": 37.5665, "work_lng": 126.9780,
-            "home_lat": 37.4979, "home_lng": 127.0276,
+            "work_lat": lat, "work_lng": lng,
+            "home_lat": lat + 0.01, "home_lng": lng + 0.01,
             "leave_time": "18:30",
             "max_distance_km": 3.0,
             "limit": 10,
@@ -150,11 +171,12 @@ def test_recommend_ranks_courses_for_weak_factors():
 
 def test_recommend_without_diagnosis_id():
     with TestClient(app) as c:
+        lat, lng = a_corridor(c)
         r = c.post("/api/v1/recommend", json={
             "device_id": "no-diag",
             "weak_factors": ["flex", "power"],
-            "work_lat": 37.5665, "work_lng": 126.9780,
-            "home_lat": 37.4979, "home_lng": 127.0276,
+            "work_lat": lat, "work_lng": lng,
+            "home_lat": lat + 0.01, "home_lng": lng + 0.01,
             "leave_time": "18:30", "max_distance_km": 3.0,
         })
         assert r.status_code == 200
