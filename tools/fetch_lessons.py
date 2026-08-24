@@ -85,14 +85,14 @@ FIELDS = {
     "eduPlaceRdnmadr": "교육장도로명주소",
     "operInstitutionNm": "운영기관명",
     "institutionNm": "운영기관명2",
-    "phoneNumber": "전화번호",
+    "phoneNumber": "운영기관전화번호",
     "homepageUrl": "홈페이지",
     "lctreCn": "강좌내용",
     "eduTrgetSe": "교육대상구분",
-    "eduMthSe": "교육방법",
+    "eduMthSe": "교육방법구분",
     "eduBgngDe": "교육시작일자",
     "eduEndDe": "교육종료일자",
-    "lctreCo": "정원",
+    "lctreCo": "강좌정원수",
     "lctreCost": "수강료",
 }
 
