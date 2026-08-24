@@ -3,6 +3,7 @@ package com.fitbalance.app.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.fitbalance.app.ui.screens.DeleteState
 import com.fitbalance.app.data.ApiClient
 import com.fitbalance.app.data.Center
 import com.fitbalance.app.data.CenterResponse
@@ -109,6 +110,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** 최근 진단 결과. 홈 화면 요약과 추천 요청에 쓴다. */
     val lastDiagnosis: DiagnoseResponse?
         get() = (_diagnosis.value as? UiState.Success)?.data
+
+    /** 설정의 '내 기록 삭제' 상태. */
+    private val _deleteState = MutableStateFlow(DeleteState.Idle)
+    val deleteState: StateFlow<DeleteState> = _deleteState
+
+    /**
+     * 서버에 남은 이 기기의 기록을 지운다.
+     *
+     * 로그인이 없으므로 기기 UUID 가 유일한 식별자다. 서버가 실패해도 사용자에게는
+     * 되돌릴 방법이 없으니 상태를 되돌려 다시 누를 수 있게 둔다.
+     */
+    fun deleteMyData() {
+        if (_deleteState.value == DeleteState.Working) return
+        _deleteState.value = DeleteState.Working
+        viewModelScope.launch {
+            runCatching { ApiClient.service.deleteMyData(deviceId) }
+                .onSuccess { _deleteState.value = DeleteState.Done }
+                .onFailure { _deleteState.value = DeleteState.Idle }
+        }
+    }
 
     fun saveSettings(s: Settings) {
         prefs.workLat = s.workLat

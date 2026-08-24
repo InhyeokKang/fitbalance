@@ -51,6 +51,9 @@ import com.fitbalance.app.ui.components.VSpace
 import com.fitbalance.app.ui.theme.Brand
 import kotlin.math.roundToInt
 
+/** 내 기록 삭제 버튼의 상태. */
+enum class DeleteState { Idle, Working, Done }
+
 // Slider의 thumb 교체가 아직 실험적 API다. 기본 손잡이가 세로 막대라 직접 그려 쓴다.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +65,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onSave: (Settings) -> Unit,
     onSaveServerUrl: (String) -> Unit,
+    deleteState: DeleteState = DeleteState.Idle,
+    onDeleteMyData: () -> Unit = {},
 ) {
     // 저장된 값을 Place 로 되살려 검색창에 "이미 고른 곳"으로 보여 준다.
     var work by remember {
@@ -157,6 +162,24 @@ fun SettingsScreen(
                 VSpace(10)
                 Text("기기 UUID", fontSize = 11.5.sp, color = Brand.Muted)
                 Text(deviceId, fontSize = 11.sp, color = Brand.Muted2)
+
+                // 개인정보 삭제 요구권. 로그인이 없으므로 기기 UUID 가 유일한 식별자다.
+                VSpace(14)
+                Text(
+                    "서버에는 성별·나이대·약한 체력요인만 남습니다. " +
+                        "키·몸무게·측정값은 계산에만 쓰이고 저장되지 않습니다.",
+                    fontSize = 11.5.sp,
+                    color = Brand.Muted2,
+                )
+                VSpace(10)
+                if (deleteState == DeleteState.Done) {
+                    Text("지웠습니다.", fontSize = 12.sp, color = Brand.MintDeep)
+                } else {
+                    GhostButton(
+                        if (deleteState == DeleteState.Working) "지우는 중..." else "내 기록 삭제",
+                        onDeleteMyData,
+                    )
+                }
             }
         }
 

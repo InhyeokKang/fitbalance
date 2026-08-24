@@ -316,6 +316,15 @@ private fun ReportBody(
             }
         }
 
+        // 의료기기법상 의료기기는 아니지만, 화면에 '진단'·등급이 나오므로
+        // 의학적 판단으로 읽히지 않도록 한 줄 밝힌다.
+        VSpace(20)
+        Text(
+            "이 결과는 국민체력100 공개 기준표와 대조한 참고용 정보이며 의학적 진단이 아닙니다.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Brand.Muted2,
+        )
+
         VSpace(24)
         PrimaryButton("이 약점에 맞는 강좌 보기", onSeeCourses)
         VSpace(9)

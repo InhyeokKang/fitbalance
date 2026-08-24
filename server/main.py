@@ -586,6 +586,24 @@ def health():
     }
 
 
+@app.delete("/api/v1/me")
+def delete_my_data(device_id: str = Query(..., min_length=8)):
+    """이 기기의 기록을 전부 지운다.
+
+    개인정보보호법상 정보주체는 삭제를 요구할 권리가 있고, 구글 플레이도
+    데이터 삭제 경로를 요구한다. 로그인이 없으므로 기기 UUID 가 유일한 식별자다.
+    앱 설정의 '내 기록 삭제' 가 이 엔드포인트를 부른다.
+    """
+    conn = _connect()
+    try:
+        d = conn.execute("DELETE FROM diagnoses WHERE device_id=?", (device_id,)).rowcount
+        m = conn.execute("DELETE FROM match_fail_logs WHERE device_id=?", (device_id,)).rowcount
+        conn.commit()
+        return {"deleted": {"diagnoses": d, "match_fail_logs": m}}
+    finally:
+        conn.close()
+
+
 @app.post("/api/v1/diagnose")
 def diagnose(req: DiagnoseRequest):
     conn = _connect()
@@ -617,7 +635,7 @@ def diagnose(req: DiagnoseRequest):
         profile = profile_of(factor_pct)
 
         now = datetime.now(KST)
-        diagnosis_id = f"d_{now:%Y%m%d}_{uuid.uuid4().hex[:8]}"
+        diagnosis_id = f"d_{now:%Y%m%d}_{uuid.uuid4().hex}"
         result = {
             "diagnosis_id": diagnosis_id,
             "measured_at": now.isoformat(timespec="seconds"),
@@ -694,7 +712,7 @@ def diagnose_home(req: HomeDiagnoseRequest):
         missing = "·".join(u["label"] for u in unmeasured)
 
         now = datetime.now(KST)
-        diagnosis_id = f"h_{now:%Y%m%d}_{uuid.uuid4().hex[:8]}"
+        diagnosis_id = f"h_{now:%Y%m%d}_{uuid.uuid4().hex}"
         result = {
             "diagnosis_id": diagnosis_id,
             "measured_at": now.isoformat(timespec="seconds"),
@@ -765,7 +783,7 @@ def selfcheck(req: SelfCheckRequest):
     profile = profile_of(factor_pct)
 
     now = datetime.now(KST)
-    diagnosis_id = f"s_{now:%Y%m%d}_{uuid.uuid4().hex[:8]}"
+    diagnosis_id = f"s_{now:%Y%m%d}_{uuid.uuid4().hex}"
     result = {
         "diagnosis_id": diagnosis_id,
         "measured_at": now.isoformat(timespec="seconds"),
@@ -864,8 +882,12 @@ def recommend(req: RecommendRequest):
         weak = req.weak_factors
         profile = "improve"
         if req.diagnosis_id:
+            # 요청한 기기가 그 진단의 주인일 때만 준다.
+            # device_id 를 안 보면 남의 diagnosis_id 를 아는 사람이 그 사람의
+            # 성별·나이대·약한 체력요인을 가져갈 수 있다.
             row = conn.execute(
-                "SELECT payload, profile FROM diagnoses WHERE diagnosis_id=?", (req.diagnosis_id,)
+                "SELECT payload, profile FROM diagnoses WHERE diagnosis_id=? AND device_id=?",
+                (req.diagnosis_id, req.device_id),
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail=f"진단 결과를 찾을 수 없습니다: {req.diagnosis_id}")
@@ -1119,8 +1141,12 @@ def recommend_facilities(req: RecommendRequest):
         weak = req.weak_factors or []
         profile = "improve"
         if req.diagnosis_id:
+            # 요청한 기기가 그 진단의 주인일 때만 준다.
+            # device_id 를 안 보면 남의 diagnosis_id 를 아는 사람이 그 사람의
+            # 성별·나이대·약한 체력요인을 가져갈 수 있다.
             row = conn.execute(
-                "SELECT payload, profile FROM diagnoses WHERE diagnosis_id=?", (req.diagnosis_id,)
+                "SELECT payload, profile FROM diagnoses WHERE diagnosis_id=? AND device_id=?",
+                (req.diagnosis_id, req.device_id),
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail=f"진단 결과를 찾을 수 없습니다: {req.diagnosis_id}")

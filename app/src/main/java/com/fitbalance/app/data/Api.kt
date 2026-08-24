@@ -6,6 +6,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -41,6 +42,10 @@ interface ApiService {
 
     @GET("api/v1/courses/{courseId}")
     suspend fun course(@Path("courseId") courseId: String): Course
+
+    /** 이 기기의 서버 기록을 전부 지운다. 개인정보 삭제 요구권에 대응한다. */
+    @DELETE("api/v1/me")
+    suspend fun deleteMyData(@Query("device_id") deviceId: String): Map<String, Any>
 }
 
 object ApiClient {

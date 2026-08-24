@@ -253,3 +253,48 @@ def test_centers_puts_requested_sido_first():
         # 요청한 지역이 앞쪽에 모여 있어야 한다
         head = b["items"][: b["nearby_count"]]
         assert all(i["sido"] == "서울" for i in head)
+
+
+def test_diagnosis_is_not_readable_by_another_device():
+    """남의 diagnosis_id 를 알아도 그 사람의 약점을 가져갈 수 없어야 한다.
+
+    예전에는 device_id 를 안 보고 diagnosis_id 만으로 조회해서, id 를 아는
+    사람이 성별·나이대·약한 체력요인을 그대로 읽을 수 있었다.
+    """
+    import uuid
+    me, other = str(uuid.uuid4()), str(uuid.uuid4())
+    with TestClient(app) as c:
+        did = c.post("/api/v1/diagnose", json={**SAMPLE, "device_id": me}).json()["diagnosis_id"]
+        body = {
+            "diagnosis_id": did, "work_lat": 37.5, "work_lng": 127.0,
+            "home_lat": 37.55, "home_lng": 127.05,
+            "leave_time": "18:30", "max_distance_km": 3.0,
+        }
+        assert c.post("/api/v1/recommend", json={"device_id": me, **body}).status_code == 200
+        assert c.post("/api/v1/recommend", json={"device_id": other, **body}).status_code == 404
+
+
+def test_user_can_delete_own_records():
+    """삭제 요구권. 지운 뒤에는 그 진단으로 추천을 받을 수 없어야 한다."""
+    import uuid
+    me = str(uuid.uuid4())
+    with TestClient(app) as c:
+        did = c.post("/api/v1/diagnose", json={**SAMPLE, "device_id": me}).json()["diagnosis_id"]
+        r = c.delete(f"/api/v1/me?device_id={me}")
+        assert r.status_code == 200
+        assert r.json()["deleted"]["diagnoses"] == 1
+
+        body = {
+            "diagnosis_id": did, "work_lat": 37.5, "work_lng": 127.0,
+            "home_lat": 37.55, "home_lng": 127.05,
+            "leave_time": "18:30", "max_distance_km": 3.0,
+        }
+        assert c.post("/api/v1/recommend", json={"device_id": me, **body}).status_code == 404
+
+
+def test_diagnosis_id_is_hard_to_guess():
+    """id 의 무작위 부분이 짧으면 대입으로 남의 기록을 찾을 수 있다."""
+    with TestClient(app) as c:
+        did = c.post("/api/v1/diagnose", json=SAMPLE).json()["diagnosis_id"]
+    random_part = did.rsplit("_", 1)[-1]
+    assert len(random_part) == 32, f"무작위 부분이 {len(random_part)}자뿐입니다: {did}"

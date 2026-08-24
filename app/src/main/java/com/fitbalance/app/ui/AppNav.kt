@@ -97,6 +97,7 @@ fun AppNav(vm: AppViewModel = viewModel()) {
     val courseDetail by vm.courseDetail.collectAsStateWithLifecycle()
     val centers by vm.centers.collectAsStateWithLifecycle()
     val facilities by vm.facilities.collectAsStateWithLifecycle()
+    val deleteState by vm.deleteState.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val showTutorial by vm.showTutorial.collectAsStateWithLifecycle()
     val showOnboarding by vm.showOnboarding.collectAsStateWithLifecycle()
@@ -297,6 +298,8 @@ fun AppNav(vm: AppViewModel = viewModel()) {
                     nav.popBackStack()
                 },
                 onSaveServerUrl = { vm.saveServerUrl(it) },
+                deleteState = deleteState,
+                onDeleteMyData = { vm.deleteMyData() },
             )
         }
     }
