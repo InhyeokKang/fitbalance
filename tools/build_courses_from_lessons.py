@@ -216,17 +216,30 @@ def is_for_workers(title: str, target: str) -> bool:
     return True
 
 
-def has_ended(raw: str, today: str) -> bool:
-    """교육종료일자가 오늘보다 앞이면 이미 끝난 강좌다.
+def is_stale(raw: str, today: dt.date, months: int = 12) -> bool:
+    """1년 넘게 갱신되지 않은 강좌인지 본다.
 
-    수집 데이터에는 지난 학기 강좌가 그대로 남아 있다. 끝난 강좌를 추천하면
-    사용자가 헛걸음한다. (최서영 2026-08-18 리포트에서 지적)
-    형식이 이상하면 판단하지 않고 남긴다. 멀쩡한 강좌를 지우는 쪽이 더 나쁘다.
+    이 데이터는 분기 갱신이고 2018년 것까지 그대로 쌓여 있다. 오늘 기준으로
+    아직 안 끝난 강좌는 7%뿐이라, 종료일이 지났다고 다 버리면 전국에 305줄만
+    남아 16개 도시 중 15곳이 0건이 된다.
+
+    평생학습 강좌는 학기·분기 단위로 같은 프로그램이 다시 열린다. 봄학기에
+    끝난 강좌는 가을학기에 또 열린다고 보는 편이 실제에 가깝다. 그래서 최근
+    1년 안에 운영된 것까지 남기고, 그보다 오래된 것만 폐강으로 본다.
+
+    대신 이건 '지금 등록 가능'이 아니라 '최근 1년간 운영된 정기 프로그램'이다.
+    앱은 이 사실을 사용자에게 밝히고 기관 확인을 안내해야 한다.
+    형식이 이상하면 판단하지 않고 남긴다.
     """
     digits = re.sub(r"\D", "", raw or "")
     if len(digits) != 8:
         return False
-    return digits < today
+    try:
+        end = dt.date(int(digits[:4]), int(digits[4:6]), int(digits[6:]))
+    except ValueError:
+        return False
+    elapsed = (today.year - end.year) * 12 + (today.month - end.month)
+    return elapsed > months
 
 
 def main() -> None:
@@ -237,24 +250,23 @@ def main() -> None:
 
     places = load_places()
     coords_of = load_coords()
-    today = dt.date.today().strftime("%Y%m%d")
+    today = dt.date.today()
     with open(SRC, encoding="utf-8-sig", newline="") as f:
         lessons = list(csv.DictReader(f))
 
     rows: list[list] = []
     addresses: dict[str, str] = {}
     dropped = {"종목 판정 실패": 0, "요일 없음": 0, "시각 없음": 0,
-               "좌표 못 찾음": 0, "이미 끝난 강좌": 0,
+               "좌표 못 찾음": 0, "1년 넘게 안 열린 강좌": 0,
                "직장인 대상 아님": 0}
-    exact_hit = 0
 
     for r in lessons:
         name = (r.get("강좌명") or "").strip()
         place = (r.get("교육장소") or "").strip() or (r.get("운영기관명") or "").strip()
         address = (r.get("교육장도로명주소") or "").strip()
 
-        if has_ended(r.get("교육종료일자") or "", today):
-            dropped["이미 끝난 강좌"] += 1
+        if is_stale(r.get("교육종료일자") or "", today):
+            dropped["1년 넘게 안 열린 강좌"] += 1
             continue
 
         # 열 이름이 출처마다 다르다. API 는 '교육대상', 표준 CSV 는 '교육대상구분'.
@@ -283,9 +295,8 @@ def main() -> None:
         # 이게 없을 때만 지역 색인의 시군구 대표점으로 떨어진다. 대표점은 실제
         # 시설과 중앙값 6.5km 떨어져 있어 3km 추천에는 못 쓴다. 아래 안내를 참고.
         coords = coords_of.get(address)
-        if coords is not None:
-            exact_hit += 1
-        else:
+        from_cache = coords is not None
+        if not from_cache:
             coords = locate(address, places)
         if coords is None:
             dropped["좌표 못 찾음"] += 1
@@ -300,6 +311,10 @@ def main() -> None:
             rows.append([name, place, address, f"{lat:.6f}", f"{lng:.6f}",
                          day, start, sport]
                         + [1 if f in tags else 0 for f in FACTORS])
+            # 좌표 출처를 줄에 직접 붙인다. 파일로 쓰기 전에 떼어 낸다.
+            # 강좌 단위로 세면 요일마다 줄이 늘어나 줄 수와 맞지 않고,
+            # (강좌명, 장소, 요일, 시각) 으로 세면 주소가 다른 동명 강좌끼리 겹친다.
+            rows[-1].append("cache" if from_cache else "region")
 
     if not rows:
         sys.exit("변환된 강좌가 없습니다. data/raw/lessons.csv 를 확인하세요.")
@@ -340,8 +355,9 @@ def main() -> None:
             wa.writerow([f"C{n:04d}"] + row[1:3] + [""] + row[3:])
         for row in unique:
             n += 1
-            w.writerow([f"C{n:04d}"] + row[:2] + row[3:])
-            wa.writerow([f"C{n:04d}"] + row)
+            body = row[:-1]                     # 마지막은 좌표 출처 표시라 파일에 안 쓴다
+            w.writerow([f"C{n:04d}"] + body[:2] + body[3:])
+            wa.writerow([f"C{n:04d}"] + body)
 
     # 주소표에 새 시설을 더한다. 기존 항목은 지우지 않는다.
     merged: dict[str, str] = {}
@@ -363,6 +379,7 @@ def main() -> None:
     for reason, count in sorted(dropped.items(), key=lambda kv: -kv[1]):
         if count:
             print(f"  {reason:<16} {count:>6,}")
+    exact_hit = sum(1 for r in unique if r[-1] == "cache")
     rough = len(unique) - exact_hit
     print(f"\n좌표 출처: 주소 변환 {exact_hit:,}줄 / 지역 대표점 {rough:,}줄")
     if rough:

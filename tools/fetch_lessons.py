@@ -167,8 +167,20 @@ def from_api() -> list[dict]:
 
 
 def from_csv(path: Path) -> list[dict]:
-    with open(path, encoding="utf-8-sig", newline="") as f:
-        return [normalize(r) for r in csv.DictReader(f)]
+    """내려받은 CSV 를 읽는다.
+
+    공공데이터포털이 주는 표준데이터 파일은 CP949 로 온다. API 응답은 UTF-8 이라
+    둘 다 받아야 한다. 인코딩을 잘못 잡으면 한글이 깨진 채로 조용히 지나간다.
+    """
+    for enc in ("utf-8-sig", "cp949"):
+        try:
+            with open(path, encoding=enc, newline="") as f:
+                rows = [normalize(r) for r in csv.DictReader(f)]
+            print(f"인코딩: {enc}")
+            return rows
+        except UnicodeDecodeError:
+            continue
+    sys.exit(f"{path} 의 인코딩을 알 수 없습니다. UTF-8 이나 CP949 여야 합니다.")
 
 
 def main() -> None:

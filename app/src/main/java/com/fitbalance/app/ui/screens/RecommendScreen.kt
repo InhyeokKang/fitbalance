@@ -107,6 +107,16 @@ fun RecommendScreen(
                                 )
                             }
                         }
+                        // 이 목록이 어떤 데이터인지 밝힌다. 공공데이터는 분기 갱신이라
+                        // 지난 학기에 끝난 강좌가 많고, 대부분 다시 열리지만 확인이 필요하다.
+                        if (r.dataNotice != null && r.total > 0) {
+                            VSpace(8)
+                            Text(
+                                r.dataNotice,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Brand.Muted2,
+                            )
+                        }
                         VSpace(4)
                         if (r.total > 0) {
                             GhostButton("지도로 보기", onMap)

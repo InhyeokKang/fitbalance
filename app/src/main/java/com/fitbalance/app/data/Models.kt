@@ -158,6 +158,8 @@ data class RecommendResponse(
     val hint: String? = null,
     /** 강좌가 0건일 때 동선 주변에 있는 공공체육시설 수. 대안을 제시하는 데 쓴다. */
     @SerializedName("facility_count") val facilityCount: Int = 0,
+    /** 이 강좌 목록이 어떤 데이터인지 밝히는 안내. 개설 여부 확인을 당부한다. */
+    @SerializedName("data_notice") val dataNotice: String? = null,
 )
 
 /** 시간표 없이 언제든 이용할 수 있는 공공체육시설. */
